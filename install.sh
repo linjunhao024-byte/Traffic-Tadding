@@ -1,17 +1,4 @@
 #!/bin/bash
-# ============================================================================
-# Traffic Padding Micro-Service - 一键安装脚本
-# ============================================================================
-# 用法：
-#   wget -O install.sh https://raw.githubusercontent.com/YOUR_USER/traffic-padding/main/install.sh
-#   sudo bash install.sh
-#
-#   或者：
-#   curl -sL https://raw.githubusercontent.com/YOUR_USER/traffic-padding/main/install.sh | sudo bash
-#
-# 卸载：
-#   sudo bash install.sh uninstall
-# ============================================================================
 
 set -e
 
@@ -238,18 +225,73 @@ need_root() {
     return 1
 }
 
+do_uninstall() {
+    echo ""
+    echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║                    ⚠️  一键卸载                             ║${NC}"
+    echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo "此操作将："
+    echo "  • 停止并删除服务"
+    echo "  • 删除程序文件 (/opt/traffic-padding)"
+    echo "  • 删除管理命令 (tpm)"
+    echo ""
+    read -rp "确认卸载？(y/N): " confirm
+    if [[ "${confirm,,}" != "y" ]]; then
+        echo "已取消"
+        wait_key
+        return
+    fi
+
+    echo ""
+    echo "正在卸载..."
+
+    # 停止服务
+    systemctl stop "${SERVICE_NAME}" 2>/dev/null
+    systemctl disable "${SERVICE_NAME}" 2>/dev/null
+
+    # 删除服务文件
+    rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+    systemctl daemon-reload
+
+    # 删除快捷命令
+    rm -f "/usr/local/bin/tpm"
+
+    # 删除程序
+    rm -rf "/opt/traffic-padding"
+
+    # 询问删除配置
+    echo ""
+    read -rp "是否删除配置文件 (/etc/traffic-padding)？(y/N): " del_config
+    if [[ "${del_config,,}" == "y" ]]; then
+        rm -rf "/etc/traffic-padding"
+        echo -e "${GREEN}[✓]${NC} 配置已删除"
+    else
+        echo "配置已保留: /etc/traffic-padding"
+    fi
+
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                    ✅ 卸载完成                              ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    exit 0
+}
+
 main() {
     while true; do
         show_header
         get_status
         echo ""
-        echo -e "${BOLD}服务控制${NC}     ${BOLD}日志${NC}         ${BOLD}配置${NC}         ${BOLD}其他${NC}"
-        echo "  [1] 状态      [5] 实时日志  [7] 查看配置  [11] 自启开"
-        echo "  [2] 启动      [6] 最近日志  [8] 编辑配置  [12] 自启关"
-        echo "  [3] 停止                    [9] 查看配额  [13] 网卡测试"
-        echo "  [4] 重启                   [10] 重置配额  [0] 退出"
+        echo -e "${BOLD}服务控制${NC}       ${BOLD}日志${NC}           ${BOLD}配置${NC}           ${BOLD}系统${NC}"
+        echo "  [1] 查看状态    [5] 实时日志    [7] 查看配置    [9] 开机自启"
+        echo "  [2] 启动服务    [6] 最近日志    [8] 编辑配置   [10] 取消自启"
+        echo "  [3] 停止服务                               [11] 网卡测试"
+        echo "  [4] 重启服务                               [12] ⚠️ 卸载"
         echo ""
-        read -rp "选择 [0-13]: " choice
+        echo "  [0] 退出"
+        echo ""
+        read -rp "选择 [0-12]: " choice
 
         case "$choice" in
             1) systemctl status "${SERVICE_NAME}" --no-pager; wait_key ;;
@@ -260,16 +302,12 @@ main() {
             6) journalctl -u "${SERVICE_NAME}" -n 50 --no-pager; wait_key ;;
             7) cat "${CONFIG_DIR}/config.json" 2>/dev/null || echo "配置不存在"; wait_key ;;
             8) need_root && ${EDITOR:-nano} "${CONFIG_DIR}/config.json"; wait_key ;;
-            9) cat "${CONFIG_DIR}/usage.json" 2>/dev/null || echo "无记录"; wait_key ;;
-            10) need_root && python3 -c "
-import json;from datetime import datetime
-json.dump({'date':datetime.now().strftime('%Y-%m-%d'),'used_bytes':0},open('${CONFIG_DIR}/usage.json','w'))
-print('已重置')
-" 2>/dev/null; wait_key ;;
-            11) need_root && systemctl enable "${SERVICE_NAME}" && log_info "已启用自启"; wait_key ;;
-            12) need_root && systemctl disable "${SERVICE_NAME}" && log_info "已禁用自启"; wait_key ;;
-            13) grep "$(python3 -c "import json;print(json.load(open('${CONFIG_DIR}/config.json')).get('interface','eth0'))" 2>/dev/null || echo 'eth0'):" /proc/net/dev 2>/dev/null || echo "网卡读取失败"; wait_key ;;
+            9) need_root && systemctl enable "${SERVICE_NAME}" && log_info "已启用自启"; wait_key ;;
+            10) need_root && systemctl disable "${SERVICE_NAME}" && log_info "已取消自启"; wait_key ;;
+            11) grep "$(python3 -c "import json;print(json.load(open('${CONFIG_DIR}/config.json')).get('interface','eth0'))" 2>/dev/null || echo 'eth0'):" /proc/net/dev 2>/dev/null || echo "网卡读取失败"; wait_key ;;
+            12) need_root && do_uninstall ;;
             0) clear; exit 0 ;;
+            *) echo -e "${RED}无效选项${NC}"; sleep 1 ;;
         esac
     done
 }
