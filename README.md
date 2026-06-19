@@ -1,6 +1,5 @@
 <p align="center">
-  <h1 align="center">🛡️ Traffic Padding Micro-Service</h1>
-  <p align="center">流量伪装微服务 — 使云服务器上下行流量比例自然化</p>
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f0f0f,50:fce300,100:00f0ff&height=220&section=header&text=Traffic-Padding&fontSize=50&fontColor=fce300&fontAlignY=35&desc=Traffic%20Padding%20Micro-Service&descSize=15&descColor=00f0ff&descAlignY=55&animation=twinkling" width="100%"/>
 </p>
 
 <p align="center">
@@ -11,18 +10,6 @@
   <img src="https://img.shields.io/badge/Python-3.6+-blue?style=flat-square&logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Dependencies-Zero-brightgreen?style=flat-square" alt="Zero Deps">
 </p>
-
-```text
-    __     _____   __  __             ____                        __        __
-   / /    /  _/   / | / /            / __ \   ____    ____/ /   ____/ /   (_)   ____       ____
-  / /     / /    /  |/ /   ______   / /_/ /  / __ `/  / __  /   / __  /   / /   / __ \     / __ `/
- / /___  _/ /    / /|  /   /_____/  / .___/  / /_/ /  / /_/ /   / /_/ /   / /   / / / /    / /_/ /
-/_____/ /___/   /_/ |_/            /_/       \__,_/   \__,_/    \__,_/   /_/   /_/ /_/     \__, /
-                                                                                           /____/
-
-                        Traffic Padding Micro-Service
-                            流量伪装微服务
-```
 
 <p align="center">
   专为国内代理/中转服务器设计，全天候平滑化流量特征，告别 1:1 封锁风险。
@@ -87,7 +74,7 @@ cd /tmp && wget -q https://ghp.ci/https://raw.githubusercontent.com/linjunhao024
 
 ## 📋 安装过程
 
-安装脚本会引导你完成 4 项配置：
+安装脚本会引导你完成 5 项配置：
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
@@ -101,7 +88,7 @@ cd /tmp && wget -q https://ghp.ci/https://raw.githubusercontent.com/linjunhao024
 
 确认配置时可以：
 - 输入 `Y` 确认安装
-- 输入 `1/2/3/4` 返回修改对应配置
+- 输入 `1/2/3/4/5` 返回修改对应配置
 - 输入 `N` 取消安装
 
 ---
@@ -112,7 +99,7 @@ cd /tmp && wget -q https://ghp.ci/https://raw.githubusercontent.com/linjunhao024
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║          Traffic Padding Manager (tpm)                      ║
+║          Traffic Padding Manager                           ║
 ╚══════════════════════════════════════════════════════════════╝
 
 状态: 运行中  自启: 已启用
@@ -134,7 +121,7 @@ cd /tmp && wget -q https://ghp.ci/https://raw.githubusercontent.com/linjunhao024
 
 ```
 GitHub 仓库                        服务器安装后
-traffic-padding/                   /opt/traffic-padding/
+Traffic-Tadding/                   /opt/traffic-padding/
 ├── install.sh  ──────────────────►├── main.py
 ├── main.py                        └── tpm.sh (自动生成)
 └── README.md                           │
@@ -173,22 +160,6 @@ traffic-padding/                   /opt/traffic-padding/
     "tg_monthly_reset_day": 1         // 月额度重置日（月报用）
 }
 ```
-
----
-
-## 🔧 技术特性
-
-| 特性 | 说明 |
-|------|------|
-| 零依赖 | 仅使用 Python 标准库 |
-| 极低资源 | CPU 最低优先级，内存上限 50MB |
-| 国内优先 | 优先使用腾讯/阿里/华为 CDN |
-| 健康检查 | URL 成功率追踪，自动降权失败源 |
-| 配置热重载 | 修改配置 5 分钟内自动生效 |
-| 滑动窗口 | 流量统计平滑，减少误判 |
-| 溢出检测 | 兼容 32 位系统计数器溢出 |
-| 优雅退出 | 支持 SIGTERM 信号处理 |
-| TG 推送 | 日报/周报/月报，支持月额度占比统计 |
 
 ---
 
@@ -238,6 +209,22 @@ traffic-padding/                   /opt/traffic-padding/
 | 日报 | 每天 23:00 发送 |
 | 周报 | 每周一 23:00 发送 |
 | 月报 | 月额度重置日前 12 小时发送 |
+
+---
+
+## 🔧 技术特性
+
+| 特性 | 说明 |
+|------|------|
+| 零依赖 | 仅使用 Python 标准库 |
+| 极低资源 | CPU 最低优先级，内存上限 50MB |
+| 国内优先 | 优先使用腾讯/阿里/华为 CDN |
+| 健康检查 | URL 成功率追踪，自动降权失败源 |
+| 配置热重载 | 修改配置 5 分钟内自动生效 |
+| 滑动窗口 | 流量统计平滑，减少误判 |
+| 溢出检测 | 兼容 32 位系统计数器溢出 |
+| 优雅退出 | 支持 SIGTERM 信号处理 |
+| TG 推送 | 日报/周报/月报，支持月额度占比统计 |
 
 ---
 
