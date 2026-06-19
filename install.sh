@@ -351,7 +351,7 @@ do_uninstall() {
 
     echo ""
     echo -e "${GREEN}✅ 卸载完成${NC}"
-    echo "  https://github.com/linjunhao024-byte/traffic-padding/issues"
+    echo "  https://github.com/linjunhao024-byte/Traffic-Tadding/issues"
     echo ""
     exit 0
 }
@@ -519,7 +519,7 @@ show_success() {
     echo ""
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "  如果这个项目对你有帮助，请给一个 ${GREEN}⭐ Star！${NC}"
-    echo -e "  ${CYAN}https://github.com/linjunhao024-byte/traffic-padding${NC}"
+    echo -e "  ${CYAN}https://github.com/linjunhao024-byte/Traffic-Tadding${NC}"
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 }
@@ -542,7 +542,7 @@ uninstall() {
 
     echo ""
     echo -e "${GREEN}✅ 卸载完成${NC}"
-    echo "  https://github.com/linjunhao024-byte/traffic-padding/issues"
+    echo "  https://github.com/linjunhao024-byte/Traffic-Tadding/issues"
     echo ""
 }
 

@@ -4,10 +4,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/linjunhao024-byte/traffic-padding/stargazers"><img src="https://img.shields.io/github/stars/linjunhao024-byte/traffic-padding?style=flat-square&color=yellow&logo=github&cacheSeconds=60" alt="Stars"></a>
-  <a href="https://github.com/linjunhao024-byte/traffic-padding/network/members"><img src="https://img.shields.io/github/forks/linjunhao024-byte/traffic-padding?style=flat-square&color=blue&logo=github&cacheSeconds=60" alt="Forks"></a>
-  <a href="https://github.com/linjunhao024-byte/traffic-padding/issues"><img src="https://img.shields.io/github/issues/linjunhao024-byte/traffic-padding?style=flat-square&color=red&logo=github&cacheSeconds=60" alt="Issues"></a>
-  <a href="https://github.com/linjunhao024-byte/traffic-padding/blob/main/LICENSE"><img src="https://img.shields.io/github/license/linjunhao024-byte/traffic-padding?style=flat-square&color=brightgreen&cacheSeconds=60" alt="License"></a>
+  <a href="https://github.com/linjunhao024-byte/Traffic-Tadding/stargazers"><img src="https://img.shields.io/github/stars/linjunhao024-byte/Traffic-Tadding?style=flat-square&color=yellow&logo=github&cacheSeconds=60" alt="Stars"></a>
+  <a href="https://github.com/linjunhao024-byte/Traffic-Tadding/network/members"><img src="https://img.shields.io/github/forks/linjunhao024-byte/Traffic-Tadding?style=flat-square&color=blue&logo=github&cacheSeconds=60" alt="Forks"></a>
+  <a href="https://github.com/linjunhao024-byte/Traffic-Tadding/issues"><img src="https://img.shields.io/github/issues/linjunhao024-byte/Traffic-Tadding?style=flat-square&color=red&logo=github&cacheSeconds=60" alt="Issues"></a>
+  <a href="https://github.com/linjunhao024-byte/Traffic-Tadding/blob/main/LICENSE"><img src="https://img.shields.io/github/license/linjunhao024-byte/Traffic-Tadding?style=flat-square&color=brightgreen&cacheSeconds=60" alt="License"></a>
   <img src="https://img.shields.io/badge/Python-3.6+-blue?style=flat-square&logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Dependencies-Zero-brightgreen?style=flat-square" alt="Zero Deps">
 </p>
@@ -33,7 +33,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/linjunhao024-byte/traffic-padding/issues">🔗 提交 Issue</a> | <a href="https://github.com/linjunhao024-byte/traffic-padding">📖 查看源码</a>
+  <a href="https://github.com/linjunhao024-byte/Traffic-Tadding/issues">🔗 提交 Issue</a> | <a href="https://github.com/linjunhao024-byte/Traffic-Tadding">📖 查看源码</a>
 </p>
 
 ---
@@ -74,13 +74,13 @@
 **🌍 国际 / 海外节点（官方直连）：**
 
 ```bash
-cd /tmp && wget -q https://raw.githubusercontent.com/linjunhao024-byte/traffic-padding/main/install.sh && wget -q https://raw.githubusercontent.com/linjunhao024-byte/traffic-padding/main/main.py && sudo bash install.sh
+cd /tmp && wget -q https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/install.sh && wget -q https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/main.py && sudo bash install.sh
 ```
 
 **🇨🇳 中国大陆服务器（镜像加速）：**
 
 ```bash
-cd /tmp && wget -q https://ghp.ci/https://raw.githubusercontent.com/linjunhao024-byte/traffic-padding/main/install.sh && wget -q https://ghp.ci/https://raw.githubusercontent.com/linjunhao024-byte/traffic-padding/main/main.py && sudo bash install.sh
+cd /tmp && wget -q https://ghp.ci/https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/install.sh && wget -q https://ghp.ci/https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/main.py && sudo bash install.sh
 ```
 
 ---
@@ -260,9 +260,9 @@ sudo bash install.sh uninstall
 
 ## 💬 反馈与支持
 
-- 🐛 [提交 Bug](https://github.com/linjunhao024-byte/traffic-padding/issues)
-- 💡 [功能建议](https://github.com/linjunhao024-byte/traffic-padding/issues)
-- ⭐ [给个 Star](https://github.com/linjunhao024-byte/traffic-padding)
+- 🐛 [提交 Bug](https://github.com/linjunhao024-byte/Traffic-Tadding/issues)
+- 💡 [功能建议](https://github.com/linjunhao024-byte/Traffic-Tadding/issues)
+- ⭐ [给个 Star](https://github.com/linjunhao024-byte/Traffic-Tadding)
 
 ---
 
