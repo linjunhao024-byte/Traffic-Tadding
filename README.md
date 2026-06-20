@@ -67,8 +67,10 @@ cd /tmp && wget -q https://raw.githubusercontent.com/linjunhao024-byte/Traffic-T
 **🇨🇳 中国大陆服务器（镜像加速）：**
 
 ```bash
-cd /tmp && wget -q https://ghp.ci/https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/install.sh && wget -q https://ghp.ci/https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/main.py && sudo bash install.sh
+cd /tmp && wget -q https://ghfast.top/https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/install.sh && wget -q https://ghfast.top/https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/main.py && sudo bash install.sh
 ```
+
+> 如果上述镜像不可用，可尝试其他镜像：`ghproxy.cc`、`gh.ddlc.top`、`gh-proxy.com`，或手动下载后上传到服务器 `/tmp` 目录。
 
 ---
 
