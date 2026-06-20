@@ -82,9 +82,11 @@ cd /tmp && wget -q https://ghp.ci/https://raw.githubusercontent.com/linjunhao024
 | 流量比例 | 下行:上行 | 1:3 |
 | 每日配额 | 最大额外下载量 | 10 GB |
 | 月流量额度 | 服务器月流量总额度（用于计算占比） | 0（禁用） |
-| TG 推送 | Telegram 机器人消息推送 | N（禁用） |
+| 消息推送 | 钉钉机器人（推荐）或 Telegram | N（禁用） |
 | 报告频率 | 日报/周报/月报 | 日报 |
 | 管理命令 | 快捷命令名称（1-3字符） | tp |
+
+> ⚠️ **国内服务器提示**：如果服务器在中国大陆，Telegram API (`api.telegram.org`) 可能无法访问，建议选择钉钉机器人。
 
 确认配置时可以：
 - 输入 `Y` 确认安装
@@ -157,17 +159,41 @@ Traffic-Tadding/                   /opt/traffic-padding/
     "tg_bot_token": "",               // TG Bot Token
     "tg_chat_id": "",                 // TG Chat ID
     "tg_report_freq": "daily",        // 报告频率: daily/weekly/monthly
-    "tg_monthly_reset_day": 1         // 月额度重置日（月报用）
+    "tg_monthly_reset_day": 1,        // 月额度重置日（月报用）
+    "dingtalk_enabled": false,        // 启用钉钉推送
+    "dingtalk_webhook": "",           // 钉钉机器人 Webhook URL
+    "dingtalk_secret": "",            // 钉钉加签密钥（可选）
+    "dingtalk_report_freq": "daily",  // 报告频率: daily/weekly/monthly
+    "dingtalk_monthly_reset_day": 1   // 月额度重置日（月报用）
 }
 ```
 
 ---
 
-## 📱 TG 消息推送（可选）
+## 📱 消息推送（可选）
 
-安装时可选择启用 Telegram 机器人推送，接收服务运行状态报告。
+安装时可选择启用消息推送，支持 **钉钉机器人**（推荐国内服务器）和 **Telegram** 两种方式。
 
-**推送内容示例：**
+> ⚠️ 如果服务器在中国大陆，Telegram API (`api.telegram.org`) 可能无法访问，建议选择钉钉机器人。
+
+### 钉钉机器人（推荐）
+
+**前置准备：**
+
+1. 打开钉钉群 → 群设置 → 智能群助手 → 添加机器人 → 自定义
+2. 安全设置建议选择「自定义关键词」，填写：`Traffic Padding`
+3. 复制 Webhook URL，安装时粘贴即可
+4. （可选）如需更高安全性，可启用「加签」并复制密钥
+
+### Telegram
+
+**前置准备：**
+
+1. 在 Telegram 搜索 `@BotFather`，创建机器人获取 Token
+2. 在 Telegram 搜索 `@userinfobot`，获取你的 Chat ID
+3. 安装时输入 Token 和 Chat ID 即可
+
+### 推送内容示例
 
 ```
 📋 Traffic Padding 日报
@@ -196,13 +222,7 @@ Traffic-Tadding/                   /opt/traffic-padding/
 └ 时间权重: 1.00x
 ```
 
-**前置准备：**
-
-1. 在 Telegram 搜索 `@BotFather`，创建机器人获取 Token
-2. 在 Telegram 搜索 `@userinfobot`，获取你的 Chat ID
-3. 安装时输入 Token 和 Chat ID 即可
-
-**报告频率：**
+### 报告频率
 
 | 频率 | 说明 |
 |------|------|
@@ -224,7 +244,7 @@ Traffic-Tadding/                   /opt/traffic-padding/
 | 滑动窗口 | 流量统计平滑，减少误判 |
 | 溢出检测 | 兼容 32 位系统计数器溢出 |
 | 优雅退出 | 支持 SIGTERM 信号处理 |
-| TG 推送 | 日报/周报/月报，支持月额度占比统计 |
+| 消息推送 | 支持钉钉机器人和 Telegram，日报/周报/月报 |
 
 ---
 
