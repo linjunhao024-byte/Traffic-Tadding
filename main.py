@@ -875,6 +875,7 @@ class TrafficPaddingService:
         self.first_task_done = False  # 首次任务完成标志
         self._cached_traffic_stats = None  # 缓存流量统计
         self.start_time = time.time()  # 记录启动时间
+        self.manual_report_requested = False  # 手动推送请求标志
 
     def _send_notification(self, text: str):
         """同时发送到 TG 和钉钉"""
@@ -966,6 +967,24 @@ class TrafficPaddingService:
 
         if self.cycle_count % 20 == 0:
             self._log_stats()
+
+        # 手动推送请求处理
+        if self.manual_report_requested:
+            self.manual_report_requested = False
+            log_message("INFO", "收到手动推送请求，发送报告...")
+            report_sent = False
+            if self.tg_notifier.enabled:
+                report = self.tg_notifier.build_report(self)
+                if self.tg_notifier.send_message(report):
+                    report_sent = True
+                    log_message("INFO", "TG 手动报告已发送")
+            if self.dingtalk_notifier.enabled:
+                report = self.dingtalk_notifier.build_report(self)
+                if self.dingtalk_notifier.send_message(report):
+                    report_sent = True
+                    log_message("INFO", "钉钉手动报告已发送")
+            if not report_sent:
+                log_message("WARN", "未启用推送或发送失败")
 
         # 定期报告检查
         now = time.time()
@@ -1080,7 +1099,12 @@ def main():
         log_message("INFO", "收到 SIGTERM，优雅退出...")
         service.running = False
 
+    def sigusr1_handler(signum, frame):
+        log_message("INFO", "收到 SIGUSR1，触发手动推送...")
+        service.manual_report_requested = True
+
     signal.signal(signal.SIGTERM, sigterm_handler)
+    signal.signal(signal.SIGUSR1, sigusr1_handler)
     service.run()
 
 
