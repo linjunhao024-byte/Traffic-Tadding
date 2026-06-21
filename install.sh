@@ -216,7 +216,7 @@ prompt_config() {
                     if [[ -n "$DINGTALK_SECRET" ]]; then
                         local timestamp=$(($(date +%s) * 1000))
                         local string_to_sign="${timestamp}\n${DINGTALK_SECRET}"
-                        local sign=$(echo -ne "$string_to_sign" | openssl dgst -sha256 -hmac "$DINGTALK_SECRET" -binary | base64)
+                        local sign=$(printf '%s' "$string_to_sign" | openssl dgst -sha256 -hmac "$DINGTALK_SECRET" -binary | base64 -w 0)
                         local sign_encoded=$(python3 -c "import urllib.parse; print(urllib.parse.quote_plus('$sign'))" 2>/dev/null || echo "$sign")
                         dt_url="${dt_url}&timestamp=${timestamp}&sign=${sign_encoded}"
                     fi
@@ -451,7 +451,14 @@ main() {
             2) need_root && systemctl start "${SERVICE_NAME}" && log_info "已启动"; wait_key ;;
             3) need_root && systemctl stop "${SERVICE_NAME}" && log_info "已停止"; wait_key ;;
             4) need_root && systemctl restart "${SERVICE_NAME}" && log_info "已重启"; wait_key ;;
-            5) journalctl -u "${SERVICE_NAME}" -f --no-pager; wait_key ;;
+            5)
+                echo -e "${YELLOW}按 Enter 返回菜单...${NC}"
+                journalctl -u "${SERVICE_NAME}" -f --no-pager &
+                local jctl_pid=$!
+                read -r
+                kill $jctl_pid 2>/dev/null
+                wait $jctl_pid 2>/dev/null
+                ;;
             6) journalctl -u "${SERVICE_NAME}" -n 50 --no-pager; wait_key ;;
             7) cat "${CONFIG_DIR}/config.json" 2>/dev/null || echo "配置不存在"; wait_key ;;
             8) need_root && ${EDITOR:-nano} "${CONFIG_DIR}/config.json"; wait_key ;;
