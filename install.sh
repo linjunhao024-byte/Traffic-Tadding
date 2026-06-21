@@ -51,6 +51,11 @@ detect_interface() {
     echo "$iface"
 }
 
+list_interfaces() {
+    echo -e "${BOLD}可用网卡:${NC}"
+    awk -F: '/:/ && !/lo/{gsub(/^[ \t]+/, "", $1); print "  - " $1}' /proc/net/dev 2>/dev/null
+}
+
 validate_interface() {
     grep -q "^[[:space:]]*${1}:" /proc/net/dev 2>/dev/null
 }
@@ -84,9 +89,14 @@ prompt_config() {
     while true; do
         echo -e "${BOLD}━━━ 步骤 1/5: 网卡配置 ━━━${NC}"
         echo ""
+        list_interfaces
+        echo ""
         local detected=$(detect_interface)
         if [[ -n "$detected" ]]; then
             echo -e "检测到默认网卡: ${GREEN}${detected}${NC}"
+            echo -e "${YELLOW}💡 提示: 一般选择默认网卡即可，中转流量走的就是这个接口。${NC}"
+            echo -e "${YELLOW}   如果有 warp/docker 等虚拟网卡，通常不需要选它们。${NC}"
+            echo ""
             read -rp "使用此网卡？(Y/n): " use_detected
             INTERFACE="${detected}"
             [[ "${use_detected,,}" == "n" ]] && read -rp "请输入网卡名称: " INTERFACE
