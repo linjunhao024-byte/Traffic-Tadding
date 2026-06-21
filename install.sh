@@ -98,9 +98,11 @@ prompt_config() {
         echo ""
         echo -e "${BOLD}━━━ 步骤 2/5: 流量比例 ━━━${NC}"
         echo ""
-        echo "  1:2 = 保守    1:3 = 推荐    1:4 = 激进"
+        echo "  [2] 1:2 = 保守"
+        echo "  [3] 1:3 = 推荐"
+        echo "  [4] 1:4 = 激进"
         echo ""
-        read -rp "请输入目标比例 [默认: 3]: " user_ratio
+        read -rp "请选择 [默认: 3]: " user_ratio
         TARGET_RATIO="${user_ratio:-3}"
 
         echo ""
