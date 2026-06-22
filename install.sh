@@ -534,6 +534,75 @@ log_info() { echo -e "  ${GREEN}[✓]${NC} $1"; }
 
 CMD_NAME="$(basename "$0")"
 
+get_auto_panel_status() {
+    if grep -q "tpm$" ~/.bashrc 2>/dev/null; then
+        echo -e "${GREEN}已开启${NC}"
+    else
+        echo -e "${DIM}已关闭${NC}"
+    fi
+}
+
+do_update() {
+    echo ""
+    echo -e "${CYAN}┌──────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${CYAN}│${NC}  ${BOLD}一键更新${NC}                                                    ${CYAN}│${NC}"
+    echo -e "${CYAN}├──────────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${CYAN}│${NC}  正在从 GitHub 下载最新版本...                                ${CYAN}│${NC}"
+    echo -e "${CYAN}└──────────────────────────────────────────────────────────────┘${NC}"
+    echo ""
+
+    # 检测是否能访问 GitHub
+    local mirror_url="https://ghfast.top/"
+    if curl -s --connect-timeout 3 https://raw.githubusercontent.com > /dev/null 2>&1; then
+        mirror_url=""
+    fi
+
+    # 下载 main.py
+    echo -ne "  下载 main.py..."
+    if curl -sL "${mirror_url}https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/main.py" -o /tmp/main.py.new; then
+        echo -e " ${GREEN}✓${NC}"
+    else
+        echo -e " ${RED}✗${NC}"
+        echo -e "  ${RED}下载失败，请检查网络${NC}"
+        wait_key
+        return 1
+    fi
+
+    # 下载 install.sh
+    echo -ne "  下载 install.sh..."
+    if curl -sL "${mirror_url}https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/install.sh" -o /tmp/install.sh.new; then
+        echo -e " ${GREEN}✓${NC}"
+    else
+        echo -e " ${RED}✗${NC}"
+        echo -e "  ${RED}下载失败，请检查网络${NC}"
+        wait_key
+        return 1
+    fi
+
+    # 备份并替换
+    echo -ne "  备份旧文件..."
+    cp "${INSTALL_DIR}/main.py" "${INSTALL_DIR}/main.py.bak" 2>/dev/null
+    echo -e " ${GREEN}✓${NC}"
+
+    echo -ne "  更新 main.py..."
+    mv /tmp/main.py.new "${INSTALL_DIR}/main.py"
+    chmod 755 "${INSTALL_DIR}/main.py"
+    echo -e " ${GREEN}✓${NC}"
+
+    echo -ne "  更新管理脚本..."
+    mv /tmp/install.sh.new /tmp/install.sh
+    bash /tmp/install.sh --update-tpm-only 2>/dev/null || true
+    echo -e " ${GREEN}✓${NC}"
+
+    echo ""
+    echo -e "${GREEN}  ✅ 更新完成！${NC}"
+    echo -e "  建议重启服务: ${CYAN}systemctl restart traffic-padding${NC}"
+    echo ""
+    wait_key
+}
+
+do_update
+
 main() {
     while true; do
         show_header
@@ -551,10 +620,12 @@ main() {
         echo -e "${CYAN}├─────────────────────────────────────────────────────────────────┤${NC}"
         echo -e "${CYAN}│${NC}  ${CYAN}[10]${NC} 开机自启    ${CYAN}[11]${NC} 取消自启    ${CYAN}[12]${NC} 网卡测试    ${RED}[13]${NC} 卸载  ${CYAN}│${NC}"
         echo -e "${CYAN}├─────────────────────────────────────────────────────────────────┤${NC}"
+        echo -e "${CYAN}│${NC}  ${GREEN}[14]${NC} 一键更新    ${YELLOW}[15]${NC} 自动面板: $(get_auto_panel_status)                     ${CYAN}│${NC}"
+        echo -e "${CYAN}├─────────────────────────────────────────────────────────────────┤${NC}"
         echo -e "${CYAN}│${NC}  ${CYAN}[0]${NC} 退出                                                          ${CYAN}│${NC}"
         echo -e "${CYAN}└─────────────────────────────────────────────────────────────────┘${NC}"
         echo ""
-        echo -ne "  请选择 [0-13]: "
+        echo -ne "  请选择 [0-15]: "
         read choice
 
         case "$choice" in
@@ -640,6 +711,21 @@ with open('${CONFIG_DIR}/config.json') as f:
                 ;;
             13)
                 need_root && do_uninstall
+                ;;
+            14)
+                need_root && do_update
+                ;;
+            15)
+                echo ""
+                if grep -q "tpm$" ~/.bashrc 2>/dev/null; then
+                    sed -i '/tpm$/d' ~/.bashrc
+                    log_info "已关闭自动面板"
+                else
+                    echo "# Traffic Padding 管理面板" >> ~/.bashrc
+                    echo "tpm" >> ~/.bashrc
+                    log_info "已开启自动面板（下次登录生效）"
+                fi
+                wait_key
                 ;;
             0)
                 clear
@@ -826,6 +912,13 @@ uninstall() {
 # ============================================================================
 
 main() {
+    # 仅更新管理脚本模式（供一键更新使用）
+    if [[ "$1" == "--update-tpm-only" ]]; then
+        CMD_NAME="${CMD_NAME:-tp}"
+        generate_tpm
+        exit 0
+    fi
+
     echo -e "${CYAN}"
     echo "╔═══════════════════════════════════════════════════════════════════════════════╗"
     echo "║                                                                               ║"
