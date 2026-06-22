@@ -534,6 +534,243 @@ log_info() { echo -e "  ${GREEN}[✓]${NC} $1"; }
 
 CMD_NAME="$(basename "$0")"
 
+do_edit_config() {
+    while true; do
+        echo ""
+        # 读取当前配置
+        local config_data=$(python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json') as f:
+    c = json.load(f)
+print(c.get('server_name', 'Realm中转服务器'))
+print(c.get('target_ratio', 3))
+print(c.get('max_daily_extra_gb', 10))
+print(c.get('monthly_quota_gb', 0))
+print(c.get('tg_enabled', False))
+print(c.get('dingtalk_enabled', False))
+print(c.get('tg_report_freq', c.get('dingtalk_report_freq', 'daily')))
+print(c.get('tg_report_hour', c.get('dingtalk_report_hour', 23)))
+" 2>/dev/null)
+
+        local server_name=$(echo "$config_data" | sed -n '1p')
+        local ratio=$(echo "$config_data" | sed -n '2p')
+        local daily_quota=$(echo "$config_data" | sed -n '3p')
+        local monthly_quota=$(echo "$config_data" | sed -n '4p')
+        local tg_enabled=$(echo "$config_data" | sed -n '5p')
+        local dt_enabled=$(echo "$config_data" | sed -n '6p')
+        local freq=$(echo "$config_data" | sed -n '7p')
+        local hour=$(echo "$config_data" | sed -n '8p')
+
+        local push_status="未启用"
+        [[ "$tg_enabled" == "True" ]] && push_status="Telegram"
+        [[ "$dt_enabled" == "True" ]] && push_status="钉钉机器人"
+
+        local freq_label="日报"
+        [[ "$freq" == "weekly" ]] && freq_label="周报"
+        [[ "$freq" == "monthly" ]] && freq_label="月报"
+
+        local monthly_str="${monthly_quota} GB"
+        [[ "$monthly_quota" == "-1" ]] && monthly_str="无限"
+        [[ "$monthly_quota" == "0" ]] && monthly_str="禁用"
+
+        echo -e "${CYAN}┌──────────────────────────────────────────────────────────────┐${NC}"
+        echo -e "${CYAN}│${NC}  ${BOLD}编辑配置${NC}                                                    ${CYAN}│${NC}"
+        echo -e "${CYAN}├──────────────────────────────────────────────────────────────┤${NC}"
+        echo -e "${CYAN}│${NC}                                                            ${CYAN}│${NC}"
+        printf "${CYAN}│${NC}    ${CYAN}[1]${NC} 服务器名称  ${GREEN}%-40s${NC}${CYAN}│${NC}\n" "${server_name}"
+        printf "${CYAN}│${NC}    ${CYAN}[2]${NC} 流量比例    ${GREEN}%-40s${NC}${CYAN}│${NC}\n" "1:${ratio}"
+        printf "${CYAN}│${NC}    ${CYAN}[3]${NC} 日配额      ${GREEN}%-40s${NC}${CYAN}│${NC}\n" "${daily_quota} GB"
+        printf "${CYAN}│${NC}    ${CYAN}[4]${NC} 月额度      ${GREEN}%-40s${NC}${CYAN}│${NC}\n" "${monthly_str}"
+        printf "${CYAN}│${NC}    ${CYAN}[5]${NC} 推送方式    ${GREEN}%-40s${NC}${CYAN}│${NC}\n" "${push_status}"
+        printf "${CYAN}│${NC}    ${CYAN}[6]${NC} 报告频率    ${GREEN}%-40s${NC}${CYAN}│${NC}\n" "${freq_label}"
+        printf "${CYAN}│${NC}    ${CYAN}[7]${NC} 推送时间    ${GREEN}%-40s${NC}${CYAN}│${NC}\n" "每日 ${hour}:00"
+        echo -e "${CYAN}│${NC}                                                            ${CYAN}│${NC}"
+        echo -e "${CYAN}│${NC}    ${CYAN}[8]${NC} 打开编辑器（高级）                                      ${CYAN}│${NC}"
+        echo -e "${CYAN}│${NC}    ${CYAN}[0]${NC} 返回                                                        ${CYAN}│${NC}"
+        echo -e "${CYAN}│${NC}                                                            ${CYAN}│${NC}"
+        echo -e "${CYAN}└──────────────────────────────────────────────────────────────┘${NC}"
+        echo ""
+        echo -ne "  请选择 [0-8]: "
+        read edit_choice
+
+        case "$edit_choice" in
+            1)
+                echo -ne "  新服务器名称 [当前: ${server_name}]: "
+                read new_name
+                if [[ -n "$new_name" ]]; then
+                    python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json', 'r') as f:
+    config = json.load(f)
+config['server_name'] = '${new_name}'
+with open('${CONFIG_DIR}/config.json', 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+"
+                    log_info "已更新服务器名称"
+                fi
+                ;;
+            2)
+                echo "  流量比例: (a)1:2 (b)1:3 (c)1:4 (d)1:5"
+                echo -ne "  选择 [当前: 1:${ratio}]: "
+                read new_ratio
+                local ratio_val=""
+                case "${new_ratio,,}" in
+                    a) ratio_val=2 ;;
+                    b) ratio_val=3 ;;
+                    c) ratio_val=4 ;;
+                    d) ratio_val=5 ;;
+                esac
+                if [[ -n "$ratio_val" ]]; then
+                    python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json', 'r') as f:
+    config = json.load(f)
+config['target_ratio'] = ${ratio_val}
+with open('${CONFIG_DIR}/config.json', 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+"
+                    log_info "已更新流量比例为 1:${ratio_val}"
+                fi
+                ;;
+            3)
+                echo -ne "  新日配额 (GB) [当前: ${daily_quota}]: "
+                read new_quota
+                if [[ -n "$new_quota" ]] && [[ "$new_quota" =~ ^[0-9]+$ ]]; then
+                    python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json', 'r') as f:
+    config = json.load(f)
+config['max_daily_extra_gb'] = ${new_quota}
+with open('${CONFIG_DIR}/config.json', 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+"
+                    log_info "已更新日配额为 ${new_quota} GB"
+                fi
+                ;;
+            4)
+                echo "  月额度: 0=禁用 -1=无限 正数=具体额度(GB)"
+                echo -ne "  新月额度 [当前: ${monthly_str}]: "
+                read new_monthly
+                if [[ -n "$new_monthly" ]]; then
+                    python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json', 'r') as f:
+    config = json.load(f)
+config['monthly_quota_gb'] = ${new_monthly}
+with open('${CONFIG_DIR}/config.json', 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+"
+                    log_info "已更新月额度"
+                fi
+                ;;
+            5)
+                echo "  推送方式: (1) 钉钉机器人 (2) Telegram (0) 禁用"
+                echo -ne "  选择: "
+                read push_choice
+                case "$push_choice" in
+                    1)
+                        echo -ne "  Webhook URL: "
+                        read webhook
+                        echo -ne "  加签密钥 (可留空): "
+                        read secret
+                        python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json', 'r') as f:
+    config = json.load(f)
+config['tg_enabled'] = False
+config['dingtalk_enabled'] = True
+config['dingtalk_webhook'] = '${webhook}'
+config['dingtalk_secret'] = '${secret}'
+with open('${CONFIG_DIR}/config.json', 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+"
+                        log_info "已配置钉钉推送"
+                        ;;
+                    2)
+                        echo -ne "  Bot Token: "
+                        read token
+                        echo -ne "  Chat ID: "
+                        read chatid
+                        python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json', 'r') as f:
+    config = json.load(f)
+config['tg_enabled'] = True
+config['tg_bot_token'] = '${token}'
+config['tg_chat_id'] = '${chatid}'
+config['dingtalk_enabled'] = False
+with open('${CONFIG_DIR}/config.json', 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+"
+                        log_info "已配置 Telegram 推送"
+                        ;;
+                    0)
+                        python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json', 'r') as f:
+    config = json.load(f)
+config['tg_enabled'] = False
+config['dingtalk_enabled'] = False
+with open('${CONFIG_DIR}/config.json', 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+"
+                        log_info "已禁用推送"
+                        ;;
+                esac
+                ;;
+            6)
+                echo "  报告频率: (1) 日报 (2) 周报 (3) 月报"
+                echo -ne "  选择 [当前: ${freq_label}]: "
+                read freq_choice
+                local new_freq=""
+                case "$freq_choice" in
+                    1) new_freq="daily" ;;
+                    2) new_freq="weekly" ;;
+                    3) new_freq="monthly" ;;
+                esac
+                if [[ -n "$new_freq" ]]; then
+                    python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json', 'r') as f:
+    config = json.load(f)
+if config.get('tg_enabled'):
+    config['tg_report_freq'] = '${new_freq}'
+if config.get('dingtalk_enabled'):
+    config['dingtalk_report_freq'] = '${new_freq}'
+with open('${CONFIG_DIR}/config.json', 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+"
+                    log_info "已更新报告频率"
+                fi
+                ;;
+            7)
+                echo -ne "  推送时间 (0-23) [当前: ${hour}]: "
+                read new_hour
+                if [[ -n "$new_hour" ]] && [[ "$new_hour" =~ ^[0-9]+$ ]] && [[ "$new_hour" -ge 0 ]] && [[ "$new_hour" -le 23 ]]; then
+                    python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json', 'r') as f:
+    config = json.load(f)
+if config.get('tg_enabled'):
+    config['tg_report_hour'] = ${new_hour}
+if config.get('dingtalk_enabled'):
+    config['dingtalk_report_hour'] = ${new_hour}
+with open('${CONFIG_DIR}/config.json', 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+"
+                    log_info "已更新推送时间为 ${new_hour}:00"
+                fi
+                ;;
+            8)
+                ${EDITOR:-nano} "${CONFIG_DIR}/config.json"
+                ;;
+            0)
+                return
+                ;;
+        esac
+    done
+}
+
 get_auto_panel_status() {
     if grep -q "tpm$" ~/.bashrc 2>/dev/null; then
         echo -e "${GREEN}已开启${NC}"
@@ -683,8 +920,7 @@ with open('${CONFIG_DIR}/config.json') as f:
                 wait_key
                 ;;
             9)
-                need_root && ${EDITOR:-nano} "${CONFIG_DIR}/config.json"
-                wait_key
+                need_root && do_edit_config
                 ;;
             10)
                 need_root && systemctl enable "${SERVICE_NAME}" && log_info "已启用开机自启"
