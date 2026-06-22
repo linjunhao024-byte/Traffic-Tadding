@@ -573,6 +573,7 @@ class BaseNotifier:
 
     def __init__(self):
         self.report_freq = 'daily'
+        self.report_hour = 23  # 推送时间（24小时制）
         self.monthly_reset_day = 1
         self.monthly_quota_gb = 0
         self.last_report_date = ""
@@ -581,6 +582,11 @@ class BaseNotifier:
         """判断是否应该发送报告"""
         now = datetime.now()
         today = now.strftime("%Y-%m-%d")
+        current_hour = now.hour
+
+        # 只在指定时间附近（±30分钟）检查是否需要发送
+        if abs(current_hour - self.report_hour) > 0 and current_hour != self.report_hour:
+            return False
 
         if today == self.last_report_date:
             return False
@@ -591,7 +597,6 @@ class BaseNotifier:
         elif self.report_freq == "monthly":
             reset_day = self.monthly_reset_day
             current_day = now.day
-            current_hour = now.hour
             if current_day == reset_day - 1 and current_hour >= 12:
                 return True
             if reset_day == 1 and current_day >= 28 and current_hour >= 12:
@@ -639,6 +644,7 @@ class TelegramNotifier(BaseNotifier):
         self.bot_token = config.get('tg_bot_token', '')
         self.chat_id = config.get('tg_chat_id', '')
         self.report_freq = config.get('tg_report_freq', 'daily')
+        self.report_hour = config.get('tg_report_hour', 23)
         self.monthly_reset_day = config.get('tg_monthly_reset_day', 1)
         self.monthly_quota_gb = config.get('monthly_quota_gb', 0)
 
@@ -708,6 +714,7 @@ class DingTalkNotifier(BaseNotifier):
         self.webhook_url = config.get('dingtalk_webhook', '')
         self.secret = config.get('dingtalk_secret', '')
         self.report_freq = config.get('dingtalk_report_freq', 'daily')
+        self.report_hour = config.get('dingtalk_report_hour', 23)
         self.monthly_reset_day = config.get('dingtalk_monthly_reset_day', 1)
         self.monthly_quota_gb = config.get('monthly_quota_gb', 0)
 
@@ -893,13 +900,14 @@ class TrafficPaddingService:
         ratio = traffic_stats.get('ratio', 1.0)
         ratio_str = f"1:{ratio:.1f}" if ratio != float('inf') else "1:∞"
         need_pad = "需要" if traffic_stats.get('need_padding', False) else "正常"
+        now = datetime.now().strftime("%H:%M:%S")
 
-        log_message("INFO", "=" * 60)
-        log_message("INFO", f"周期 #{self.cycle_count} | RX:{rx_mb:.1f}MB TX:{tx_mb:.1f}MB 比例:{ratio_str} | "
-                      f"填充:{need_pad} | 任务:{stats['task_count']} | 流量:{stats['total_downloaded_mb']:.1f}MB")
+        log_message("INFO", "=" * 65)
+        log_message("INFO", f"[{now}] 周期 #{self.cycle_count} | RX:{rx_mb:.1f}MB TX:{tx_mb:.1f}MB 比例:{ratio_str}")
+        log_message("INFO", f"填充:{need_pad} | 任务:{stats['task_count']} | 下载:{stats['total_downloaded_mb']:.1f}MB")
         log_message("INFO", f"配额: {self.scheduler.daily_quota_used / (1024**3):.3f}/{self.config.get('max_daily_extra_gb', 10)}GB | "
                       f"URL: {self.url_pool.get_url_count()} 个")
-        log_message("INFO", "=" * 60)
+        log_message("INFO", "=" * 65)
 
     def run_cycle(self):
         self.cycle_count += 1
