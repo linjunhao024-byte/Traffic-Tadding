@@ -72,6 +72,12 @@ cd /tmp && wget -q https://ghfast.top/https://raw.githubusercontent.com/linjunha
 
 > 如果上述镜像不可用，可尝试其他镜像：`ghproxy.cc`、`gh.ddlc.top`、`gh-proxy.com`，或手动下载后上传到服务器 `/tmp` 目录。
 
+**⚠️ 更新或重新安装时**，请先删除旧文件再下载（避免使用缓存的旧版本）：
+
+```bash
+cd /tmp && rm -f install.sh main.py && wget -q https://ghfast.top/https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/install.sh && wget -q https://ghfast.top/https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/main.py && sudo bash install.sh
+```
+
 ---
 
 ## 📋 安装过程
