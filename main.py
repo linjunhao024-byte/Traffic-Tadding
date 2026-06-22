@@ -20,7 +20,7 @@ import urllib.error
 import urllib.parse
 import ssl
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
 CONFIG_FILE = "/etc/traffic-padding/config.json"
@@ -457,7 +457,12 @@ class MicroTaskDownloader:
     def __init__(self, url_pool: URLPool):
         self.total_downloaded = 0
         self.task_count = 0
+        self.success_count = 0
+        self.fail_count = 0
         self.url_pool = url_pool
+        self.speed_history: List[float] = []  # 下载速度历史 (MB/s)
+        self.error_stats: Dict[str, int] = {}  # 错误类型统计
+        self.url_speed: Dict[str, List[float]] = {}  # 各 URL 速度
 
     def execute_micro_task(self, url: str, target_bytes: int) -> Dict:
         start_time = time.time()
@@ -475,6 +480,7 @@ class MicroTaskDownloader:
                 if resp.status not in (200, 206):
                     result['error'] = f"HTTP {resp.status}"
                     self.url_pool.record_url_failure(url)
+                    self._record_error(f"HTTP {resp.status}")
                     return result
 
                 bytes_read = 0
@@ -488,30 +494,86 @@ class MicroTaskDownloader:
                 result['bytes_downloaded'] = bytes_read
                 self.total_downloaded += bytes_read
                 self.task_count += 1
+                self.success_count += 1
                 self.url_pool.record_url_success(url)
 
         except urllib.error.HTTPError as e:
             result['error'] = f"HTTP {e.code}: {e.reason}"
             self.url_pool.record_url_failure(url)
+            self._record_error(f"HTTP {e.code}")
         except urllib.error.URLError as e:
             result['error'] = f"URL Error: {e.reason}"
             self.url_pool.record_url_failure(url)
+            self._record_error("连接失败")
         except TimeoutError:
             result['error'] = "超时"
             self.url_pool.record_url_failure(url)
+            self._record_error("超时")
         except Exception as e:
             result['error'] = str(e)
             self.url_pool.record_url_failure(url)
+            self._record_error("其他错误")
+
+        if not result['success']:
+            self.fail_count += 1
 
         result['duration'] = time.time() - start_time
+
+        # 记录下载速度
+        if result['success'] and result['duration'] > 0:
+            speed = (result['bytes_downloaded'] / (1024 * 1024)) / result['duration']
+            self.speed_history.append(speed)
+            if len(self.speed_history) > 100:
+                self.speed_history = self.speed_history[-100:]
+
+            # 记录各 URL 速度
+            url_name = self.url_pool.get_url_name(url)
+            if url_name not in self.url_speed:
+                self.url_speed[url_name] = []
+            self.url_speed[url_name].append(speed)
+            if len(self.url_speed[url_name]) > 20:
+                self.url_speed[url_name] = self.url_speed[url_name][-20:]
+
         return result
+
+    def _record_error(self, error_type: str):
+        """记录错误类型"""
+        self.error_stats[error_type] = self.error_stats.get(error_type, 0) + 1
 
     def get_stats(self) -> Dict:
         return {
             'total_downloaded': self.total_downloaded,
             'task_count': self.task_count,
+            'success_count': self.success_count,
+            'fail_count': self.fail_count,
             'total_downloaded_mb': self.total_downloaded / (1024 * 1024)
         }
+
+    def get_avg_speed(self) -> float:
+        """获取平均下载速度 (MB/s)"""
+        if not self.speed_history:
+            return 0
+        return sum(self.speed_history) / len(self.speed_history)
+
+    def get_fastest_url(self) -> Tuple[str, float]:
+        """获取最快的 URL"""
+        if not self.url_speed:
+            return ("无", 0)
+        best_name = max(self.url_speed, key=lambda k: sum(self.url_speed[k]) / len(self.url_speed[k]))
+        best_speed = sum(self.url_speed[best_name]) / len(self.url_speed[best_name])
+        return (best_name, best_speed)
+
+    def get_slowest_url(self) -> Tuple[str, float]:
+        """获取最慢的 URL"""
+        if not self.url_speed:
+            return ("无", 0)
+        worst_name = min(self.url_speed, key=lambda k: sum(self.url_speed[k]) / len(self.url_speed[k]))
+        worst_speed = sum(self.url_speed[worst_name]) / len(self.url_speed[worst_name])
+        return (worst_name, worst_speed)
+
+    def get_error_stats(self) -> Dict[str, int]:
+        """获取错误统计"""
+        return self.error_stats
 
 
 # ============================================================================
@@ -719,10 +781,43 @@ class TelegramNotifier(BaseNotifier):
         if self.monthly_quota_gb != 0:
             monthly_used_gb = stats['total_downloaded'] / (1024 ** 3)
             if self.monthly_quota_gb == -1:
-                monthly_usage_str = f"\n\n📊 月流量统计\n├ 月总额度: 无限\n└ 已消耗: {monthly_used_gb:.3f} GB"
+                monthly_usage_str = f"\n├ 月总额度: 无限\n└ 已消耗: {monthly_used_gb:.3f} GB"
             elif self.monthly_quota_gb > 0:
                 monthly_pct = (monthly_used_gb / self.monthly_quota_gb) * 100
-                monthly_usage_str = f"\n\n📊 月额度使用\n├ 月总额度: {self.monthly_quota_gb:.1f} GB\n├ 已消耗: {monthly_used_gb:.3f} GB\n└ 占比: {monthly_pct:.2f}%"
+                monthly_usage_str = f"\n├ 月总额度: {self.monthly_quota_gb:.1f} GB\n├ 已消耗: {monthly_used_gb:.3f} GB\n└ 占比: {monthly_pct:.2f}%"
+
+        # 下载速度统计
+        avg_speed = service.downloader.get_avg_speed()
+        fastest = service.downloader.get_fastest_url()
+        slowest = service.downloader.get_slowest_url()
+
+        # 错误统计
+        error_stats = service.downloader.get_error_stats()
+        error_str = ""
+        if error_stats:
+            error_lines = [f"├ {err}: {count} 次" for err, count in list(error_stats.items())[:3]]
+            error_str = "\n" + "\n".join(error_lines)
+            if len(error_stats) > 3:
+                error_str += f"\n└ ...共 {len(error_stats)} 种错误"
+            else:
+                error_str = error_str.replace("├", "└", 1)
+
+        # 配额预测
+        days_remaining = service.estimate_days_remaining()
+        days_str = f"{days_remaining} 天后" if days_remaining > 0 else "数据不足"
+
+        # 网卡流量对比
+        net_stats = service.get_network_stats()
+        fill_ratio = 0
+        if net_stats['rx_mb'] > 0:
+            fill_ratio = (stats['total_downloaded_mb'] / net_stats['rx_mb']) * 100
+
+        # URL 健康状态
+        url_health_str = ""
+        if service.url_pool.url_health:
+            healthy = sum(1 for h in service.url_pool.url_health.values()
+                         if h['success'] / max(1, h['success'] + h['fail']) > 0.8)
+            url_health_str = f"\n├ 健康: {healthy}/{url_count}"
 
         return f"""📋 <b>Traffic Padding {freq_label}</b>
 ━━━━━━━━━━━━━━━━━━━━
@@ -736,10 +831,25 @@ class TelegramNotifier(BaseNotifier):
 ├ 累计总量: {total_gb:.3f} GB
 ├ 今日配额: {quota_used / (1024**3):.3f} / {daily_quota_gb:.1f} GB{monthly_usage_str}
 
+📈 下载性能
+├ 平均速度: {avg_speed:.2f} MB/s
+├ 最快来源: {fastest[0]} ({fastest[1]:.1f} MB/s)
+└ 最慢来源: {slowest[0]} ({slowest[1]:.1f} MB/s)
+
+📊 流量对比
+├ 实际 RX: {net_stats['rx_mb']:.1f} MB
+├ 实际 TX: {net_stats['tx_mb']:.1f} MB
+├ 填充下载: {stats['total_downloaded_mb']:.1f} MB
+└ 填充占比: {fill_ratio:.1f}%
+
+🔗 URL 状态
+├ 总数: {url_count} 个{url_health_str}
+├ 成功: {stats['success_count']} 次
+└ 失败: {stats['fail_count']} 次{error_str}
+
 📈 运行状态
 ├ 周期: {service.cycle_count}
 ├ 任务: {stats['task_count']}
-├ URL: {url_count} 个
 └ 时长: {self._format_uptime(service)}
 
 ⚙️ 配置
@@ -825,15 +935,46 @@ class DingTalkNotifier(BaseNotifier):
         # 总用量
         total_gb = service.total_downloaded_all_time / (1024 ** 3)
 
-        # 钉钉 markdown 格式的月流量字符串
+        # 月流量
         monthly_usage_str = ""
         if self.monthly_quota_gb != 0:
             monthly_used_gb = stats['total_downloaded'] / (1024 ** 3)
             if self.monthly_quota_gb == -1:
-                monthly_usage_str = f"\n\n### 📊 月流量统计\n- 月总额度: 无限\n- 已消耗: {monthly_used_gb:.3f} GB"
+                monthly_usage_str = f"\n- 月总额度: 无限\n- 已消耗: {monthly_used_gb:.3f} GB"
             elif self.monthly_quota_gb > 0:
                 monthly_pct = (monthly_used_gb / self.monthly_quota_gb) * 100
-                monthly_usage_str = f"\n\n### 📊 月额度使用\n- 月总额度: {self.monthly_quota_gb:.1f} GB\n- 已消耗: {monthly_used_gb:.3f} GB\n- 占比: {monthly_pct:.2f}%"
+                monthly_usage_str = f"\n- 月总额度: {self.monthly_quota_gb:.1f} GB\n- 已消耗: {monthly_used_gb:.3f} GB\n- 占比: {monthly_pct:.2f}%"
+
+        # 下载速度统计
+        avg_speed = service.downloader.get_avg_speed()
+        fastest = service.downloader.get_fastest_url()
+        slowest = service.downloader.get_slowest_url()
+
+        # 错误统计
+        error_stats = service.downloader.get_error_stats()
+        error_str = ""
+        if error_stats:
+            error_lines = [f"- {err}: {count} 次" for err, count in list(error_stats.items())[:3]]
+            error_str = "\n" + "\n".join(error_lines)
+            if len(error_stats) > 3:
+                error_str += f"\n- ...共 {len(error_stats)} 种错误"
+
+        # 配额预测
+        days_remaining = service.estimate_days_remaining()
+        days_str = f"{days_remaining} 天后" if days_remaining > 0 else "数据不足"
+
+        # 网卡流量对比
+        net_stats = service.get_network_stats()
+        fill_ratio = 0
+        if net_stats['rx_mb'] > 0:
+            fill_ratio = (stats['total_downloaded_mb'] / net_stats['rx_mb']) * 100
+
+        # URL 健康状态
+        url_health_str = ""
+        if service.url_pool.url_health:
+            healthy = sum(1 for h in service.url_pool.url_health.values()
+                         if h['success'] / max(1, h['success'] + h['fail']) > 0.8)
+            url_health_str = f"\n- 健康: {healthy}/{url_count}"
 
         return f"""## 📋 Traffic Padding {freq_label}
 
@@ -848,10 +989,25 @@ class DingTalkNotifier(BaseNotifier):
 - 累计总量: {total_gb:.3f} GB
 - 今日配额: {quota_used / (1024**3):.3f} / {daily_quota_gb:.1f} GB{monthly_usage_str}
 
+### 📈 下载性能
+- 平均速度: {avg_speed:.2f} MB/s
+- 最快来源: {fastest[0]} ({fastest[1]:.1f} MB/s)
+- 最慢来源: {slowest[0]} ({slowest[1]:.1f} MB/s)
+
+### 📊 流量对比
+- 实际 RX: {net_stats['rx_mb']:.1f} MB
+- 实际 TX: {net_stats['tx_mb']:.1f} MB
+- 填充下载: {stats['total_downloaded_mb']:.1f} MB
+- 填充占比: {fill_ratio:.1f}%
+
+### 🔗 URL 状态
+- 总数: {url_count} 个{url_health_str}
+- 成功: {stats['success_count']} 次
+- 失败: {stats['fail_count']} 次{error_str}
+
 ### 📈 运行状态
 - 周期: {service.cycle_count}
 - 任务: {stats['task_count']}
-- URL: {url_count} 个
 - 时长: {self._format_uptime(service)}
 
 ### ⚙️ 配置
@@ -958,6 +1114,78 @@ class TrafficPaddingService:
         self.daily_stats = {}  # 每日统计 {date: bytes}
         self._load_stats()
 
+        # 网卡流量统计（用于对比）
+        self.start_rx_bytes = 0
+        self.start_tx_bytes = 0
+        self._init_network_baseline()
+
+    def _init_network_baseline(self):
+        """初始化网卡流量基准"""
+        try:
+            with open('/proc/net/dev', 'r') as f:
+                for line in f:
+                    if self.config.get('interface', 'eth0') in line and ':' in line:
+                        fields = line.split(':')[1].split()
+                        self.start_rx_bytes = int(fields[0])
+                        self.start_tx_bytes = int(fields[8])
+                        break
+        except (IOError, ValueError, IndexError):
+            pass
+
+    def get_network_stats(self) -> Dict:
+        """获取网卡流量统计"""
+        current_rx = 0
+        current_tx = 0
+        try:
+            with open('/proc/net/dev', 'r') as f:
+                for line in f:
+                    if self.config.get('interface', 'eth0') in line and ':' in line:
+                        fields = line.split(':')[1].split()
+                        current_rx = int(fields[0])
+                        current_tx = int(fields[8])
+                        break
+        except (IOError, ValueError, IndexError):
+            pass
+
+        rx_delta = current_rx - self.start_rx_bytes
+        tx_delta = current_tx - self.start_tx_bytes
+
+        return {
+            'rx_bytes': rx_delta,
+            'tx_bytes': tx_delta,
+            'rx_mb': rx_delta / (1024 * 1024),
+            'tx_mb': tx_delta / (1024 * 1024)
+        }
+
+    def estimate_days_remaining(self) -> int:
+        """预估配额用完天数"""
+        if len(self.daily_stats) < 2:
+            return -1  # 数据不足
+
+        # 计算最近 7 天平均用量
+        now = datetime.now()
+        total_recent = 0
+        days_count = 0
+        for i in range(7):
+            day = (now - timedelta(days=i)).strftime("%Y-%m-%d")
+            if day in self.daily_stats:
+                total_recent += self.daily_stats[day]
+                days_count += 1
+
+        if days_count == 0:
+            return -1
+
+        avg_daily = total_recent / days_count
+        if avg_daily == 0:
+            return -1
+
+        remaining_quota = self.scheduler.daily_quota_limit - self.scheduler.daily_quota_used
+        # 如果是无限配额，返回 -1
+        if self.config.get('max_daily_extra_gb', 10) <= 0:
+            return -1
+
+        return int(remaining_quota / avg_daily)
+
     def _load_stats(self):
         """加载历史统计数据"""
         try:
@@ -1010,9 +1238,9 @@ class TrafficPaddingService:
             # 本周（周一到今天）
             period_bytes = 0
             for i in range(7):
-                day = (now - __import__('datetime').timedelta(days=i)).strftime("%Y-%m-%d")
+                day = (now - timedelta(days=i)).strftime("%Y-%m-%d")
                 period_bytes += self.daily_stats.get(day, 0)
-                if (now - __import__('datetime').timedelta(days=i)).weekday() == 0:
+                if (now - timedelta(days=i)).weekday() == 0:
                     break
             period_label = "本周"
         elif freq == "monthly":
