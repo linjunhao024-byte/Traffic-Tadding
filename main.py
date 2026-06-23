@@ -623,29 +623,93 @@ class URLPool:
             log_message("WARN", f"Wikipedia 失败: {e}", throttle_key="wiki_fail")
         return urls
 
-    # 国内备用源（开发工具/容器/运行时）
+    # 国内备用源（服务器全栈资源）
     def _fetch_looking_glass(self) -> List[str]:
         urls = [
-            # Python/Node.js/Go 官方下载
+            # ── 语言运行时 ──
             "https://www.python.org/ftp/python/3.11.5/Python-3.11.5.tgz",
             "https://nodejs.org/dist/v20.5.1/node-v20.5.1-linux-x64.tar.gz",
             "https://go.dev/dl/go1.21.1.linux-amd64.tar.gz",
             "https://github.com/rust-lang/rustup/releases/download/1.26.0/rustup-init",
-            # Docker/K8s 相关
+            "https://www.php.net/distributions/php-8.2.10.tar.gz",
+            "https://download.java.net/java/GA/jdk17.0.2/dfd4a8d0985749f896bed50d7138ee7f/8/GPL/openjdk-17.0.2_linux-x64_bin.tar.gz",
+
+            # ── 包管理器/依赖 ──
+            "https://github.com/npm/cli/archive/refs/tags/v10.1.0.tar.gz",
+            "https://github.com/pypa/pip/archive/refs/tags/23.2.1.tar.gz",
+            "https://github.com/composer/composer/releases/download/2.6.2/composer.phar",
+            "https://rubygems.org/rubygems/rubygems-3.4.20.tgz",
+            "https://github.com/yarnpkg/yarn/releases/download/v1.22.19/yarn-v1.22.19.tar.gz",
+
+            # ── 容器/编排 ──
             "https://download.docker.com/linux/ubuntu/dists/jammy/pool/stable/amd64/containerd.io_1.6.22-1_amd64.deb",
             "https://storage.googleapis.com/kubernetes-release/release/v1.28.2/bin/linux/amd64/kubectl",
-            # 常用工具
-            "https://github.com/cli/cli/releases/download/v2.34.0/gh_2.34.0_linux_amd64.tar.gz",
-            "https://github.com/git/git/archive/refs/tags/v2.42.0.tar.gz",
-            # Nginx/Apache
+            "https://github.com/docker/compose/releases/download/v2.21.0/docker-compose-linux-x86_64",
+            "https://get.helm.sh/helm-v3.13.0-linux-amd64.tar.gz",
+            "https://github.com/containers/podman/releases/download/v4.7.0/podman-remote-static-linux_amd64.tar.gz",
+
+            # ── Web 服务器/代理 ──
             "https://nginx.org/download/nginx-1.25.2.tar.gz",
             "https://archive.apache.org/dist/httpd/httpd-2.4.58.tar.gz",
-            # Redis/MySQL 客户端
+            "https://github.com/caddyserver/caddy/releases/download/v2.7.4/caddy_2.7.4_linux_amd64.tar.gz",
+            "https://github.com/traefik/traefik/releases/download/v2.10.4/traefik_v2.10.4_linux_amd64.tar.gz",
+            "https://github.com/golang/go/archive/refs/tags/go1.21.1.tar.gz",
+
+            # ── 数据库/缓存 ──
             "https://download.redis.io/releases/redis-7.2.1.tar.gz",
             "https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-community-client-8.0.34-1.el7.x86_64.rpm",
+            "https://ftp.postgresql.org/pub/source/v16.0/postgresql-16.0.tar.gz",
+            "https://github.com/etcd-io/etcd/releases/download/v3.5.9/etcd-v3.5.9-linux-amd64.tar.gz",
+            "https://github.com/valkey-io/valkey/archive/refs/tags/7.2.5.tar.gz",
+
+            # ── 监控/日志 ──
+            "https://github.com/prometheus/prometheus/releases/download/v2.47.0/prometheus-2.47.0.linux-amd64.tar.gz",
+            "https://github.com/grafana/grafana/releases/download/v10.1.1/grafana-10.1.1.linux-amd64.tar.gz",
+            "https://github.com/elastic/elasticsearch/archive/refs/tags/v8.10.2.tar.gz",
+            "https://github.com/fluent/fluentd/archive/refs/tags/v1.16.2.tar.gz",
+            "https://github.com/influxdata/influxdb/releases/download/v2.7.3/influxdb2-2.7.3-linux-amd64.tar.gz",
+
+            # ── 开发工具 ──
+            "https://github.com/cli/cli/releases/download/v2.34.0/gh_2.34.0_linux_amd64.tar.gz",
+            "https://github.com/git/git/archive/refs/tags/v2.42.0.tar.gz",
+            "https://github.com/jesseduffield/lazygit/releases/download/v0.40.2/lazygit_0.40.2_Linux_x86_64.tar.gz",
+            "https://github.com/dandavison/delta/releases/download/0.16.5/delta-0.16.5-x86_64-unknown-linux-musl.tar.gz",
+            "https://github.com/sharkdp/fd/releases/download/v9.0.0/fd-v9.0.0-x86_64-unknown-linux-musl.tar.gz",
+            "https://github.com/BurntSushi/ripgrep/releases/download/13.0.0/ripgrep-13.0.0-x86_64-unknown-linux-musl.tar.gz",
+
+            # ── 系统工具 ──
+            "https://github.com/htop-dev/htop/archive/refs/tags/3.2.2.tar.gz",
+            "https://github.com/tmux/tmux/releases/download/3.3a/tmux-3.3a.tar.gz",
+            "https://github.com/vim/vim/archive/refs/tags/v9.0.1882.tar.gz",
+            "https://github.com/neovim/neovim/releases/download/v0.9.4/nvim-linux64.tar.gz",
+            "https://github.com/aria2/aria2/releases/download/release-1.36.0/aria2-1.36.0.tar.gz",
+
+            # ── 编译工具链 ──
+            "https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.gz",
+            "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
+            "https://ftp.gnu.org/gnu/cmake/cmake-3.27.5.tar.gz",
+            "https://github.com/ninja-build/ninja/archive/refs/tags/v1.11.1.tar.gz",
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.2/llvm-17.0.2.src.tar.xz",
+
+            # ── 网络工具 ──
+            "https://github.com/curl/curl/releases/download/curl-8_3_0/curl-8.3.0.tar.gz",
+            "https://github.com/wg/wrk/archive/refs/tags/4.2.0.tar.gz",
+            "https://github.com/echo-bot/httpbin/archive/refs/heads/master.tar.gz",
+            "https://github.com/ipfs/kubo/releases/download/v0.23.0/kubo_v0.23.0_linux-amd64.tar.gz",
+
+            # ── 安全/证书 ──
+            "https://github.com/openssl/openssl/archive/refs/tags/openssl-3.1.3.tar.gz",
+            "https://github.com/certbot/certbot/archive/refs/tags/v2.7.0.tar.gz",
+            "https://github.com/letsencrypt/boulder/archive/refs/tags/release-2023-09-18.tar.gz",
+
+            # ── Shell/终端 ──
+            "https://github.com/ohmyzsh/ohmyzsh/archive/refs/heads/master.tar.gz",
+            "https://github.com/starship/starship/releases/download/v1.16.0/starship-x86_64-unknown-linux-musl.tar.gz",
+            "https://github.com/ajeetdsouza/zoxide/releases/download/v0.9.2/zoxide-0.9.2-x86_64-unknown-linux-musl.tar.gz",
+            "https://github.com/junegunn/fzf/releases/download/v0.43.0/fzf-0.43.0-linux_amd64.tar.gz",
         ]
         random.shuffle(urls)
-        return urls[:3]
+        return urls[:5]
 
     def refresh_pool(self) -> bool:
         log_message("INFO", "刷新 URL 池...")
