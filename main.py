@@ -1178,6 +1178,40 @@ class DingTalkNotifier(BaseNotifier):
             log_message("WARN", f"钉钉推送失败: {e}", throttle_key="dingtalk_fail")
             return False
 
+    def _draw_bar(self, label: str, value: float, max_value: float, width: int = 30) -> str:
+        """绘制 ASCII 柱状图"""
+        if max_value <= 0:
+            filled = 0
+        else:
+            filled = int((value / max_value) * width)
+        bar = '█' * filled + '░' * (width - filled)
+        return f"  {label:12s} {bar}  {value:>8.1f} MB"
+
+    def _draw_traffic_chart(self, service: 'TrafficPaddingService') -> str:
+        """生成流量柱状图"""
+        # 获取流量统计
+        summary = service.get_traffic_summary(self.report_freq)
+        if not summary or (summary['rx_mb'] == 0 and summary['tx_mb'] == 0 and summary['download_mb'] == 0):
+            return ""
+
+        max_val = max(summary['rx_mb'], summary['tx_mb'], summary['download_mb'], 1)
+
+        chart = f"""
+### 📊 流量柱状图 ({summary['label']})
+
+```
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+{self._draw_bar('上行 (TX)', summary['tx_mb'], max_val)}   │
+│                                                     │
+{self._draw_bar('下行 (RX)', summary['rx_mb'], max_val)}   │
+│                                                     │
+{self._draw_bar('填充下载', summary['download_mb'], max_val)}   │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```"""
+        return chart
+
     def build_report(self, service: 'TrafficPaddingService') -> str:
         now = datetime.now()
         stats = service.downloader.get_stats()
@@ -1245,6 +1279,9 @@ class DingTalkNotifier(BaseNotifier):
 - 抖动: {qos_result.get('jitter', 0):.0f}ms
 - 丢包: {qos_result.get('loss', 0):.0f}%"""
 
+        # 流量柱状图
+        chart_str = self._draw_traffic_chart(service)
+
         return f"""## 📋 Traffic Padding {freq_label}
 
 ---
@@ -1272,7 +1309,7 @@ class DingTalkNotifier(BaseNotifier):
 ### 🔗 URL 状态
 - 总数: {url_count} 个{url_health_str}
 - 成功: {stats['success_count']} 次
-- 失败: {stats['fail_count']} 次{error_str}{qos_str}
+- 失败: {stats['fail_count']} 次{error_str}{qos_str}{chart_str}
 
 ### 📈 运行状态
 - 周期: {service.cycle_count}
