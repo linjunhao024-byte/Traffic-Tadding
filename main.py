@@ -698,23 +698,43 @@ class URLPool:
 
 
 # ============================================================================
-# 微任务下载器（HTTP Range 切片）
+# 微任务下载器（支持短时/长时/长短结合模式）
 # ============================================================================
 
 class MicroTaskDownloader:
-    def __init__(self, url_pool: URLPool):
+    def __init__(self, url_pool: URLPool, config: Config = None):
         self.total_downloaded = 0
         self.task_count = 0
         self.success_count = 0
         self.fail_count = 0
         self.url_pool = url_pool
+        self.config = config
+        self.download_mode = config.get('download_mode', 'short') if config else 'short'
         self.speed_history: List[float] = []  # 下载速度历史 (MB/s)
         self.error_stats: Dict[str, int] = {}  # 错误类型统计
         self.url_speed: Dict[str, List[float]] = {}  # 各 URL 速度
 
+    def execute_task(self, url: str, target_bytes: int) -> Dict:
+        """根据下载模式执行任务"""
+        # 重新读取配置（支持热切换）
+        if self.config:
+            self.download_mode = self.config.get('download_mode', 'short')
+
+        if self.download_mode == 'long':
+            return self.execute_long_task(url)
+        elif self.download_mode == 'mixed':
+            # 随机选择模式
+            if random.random() < 0.3:  # 30% 概率使用长时模式
+                return self.execute_long_task(url)
+            else:
+                return self.execute_micro_task(url, target_bytes)
+        else:  # short
+            return self.execute_micro_task(url, target_bytes)
+
     def execute_micro_task(self, url: str, target_bytes: int) -> Dict:
+        """短时下载：使用 Range 请求下载部分数据"""
         start_time = time.time()
-        result = {'success': False, 'bytes_downloaded': 0, 'duration': 0, 'error': None}
+        result = {'success': False, 'bytes_downloaded': 0, 'duration': 0, 'error': None, 'mode': 'short'}
 
         try:
             headers = {
@@ -766,8 +786,76 @@ class MicroTaskDownloader:
             self.fail_count += 1
 
         result['duration'] = time.time() - start_time
+        self._record_speed(url, result)
+        return result
 
-        # 记录下载速度
+    def execute_long_task(self, url: str) -> Dict:
+        """长时下载：下载完整文件，持续 1-5 分钟"""
+        start_time = time.time()
+        result = {'success': False, 'bytes_downloaded': 0, 'duration': 0, 'error': None, 'mode': 'long'}
+
+        # 长时下载的目标时间（60-300秒）
+        target_duration = random.randint(60, 300)
+
+        try:
+            headers = {
+                "User-Agent": random.choice(USER_AGENTS),
+                "Connection": "keep-alive",
+            }
+            req = urllib.request.Request(url, headers=headers)
+
+            with urllib.request.urlopen(req, timeout=target_duration + 30, context=SSL_CONTEXT) as resp:
+                if resp.status not in (200, 206):
+                    result['error'] = f"HTTP {resp.status}"
+                    self.url_pool.record_url_failure(url)
+                    self._record_error(f"HTTP {resp.status}")
+                    return result
+
+                bytes_read = 0
+                while True:
+                    # 检查是否达到目标时间
+                    elapsed = time.time() - start_time
+                    if elapsed >= target_duration:
+                        break
+
+                    chunk = resp.read(8192)
+                    if not chunk:
+                        break
+                    bytes_read += len(chunk)
+
+                result['success'] = True
+                result['bytes_downloaded'] = bytes_read
+                self.total_downloaded += bytes_read
+                self.task_count += 1
+                self.success_count += 1
+                self.url_pool.record_url_success(url)
+
+        except urllib.error.HTTPError as e:
+            result['error'] = f"HTTP {e.code}: {e.reason}"
+            self.url_pool.record_url_failure(url)
+            self._record_error(f"HTTP {e.code}")
+        except urllib.error.URLError as e:
+            result['error'] = f"URL Error: {e.reason}"
+            self.url_pool.record_url_failure(url)
+            self._record_error("连接失败")
+        except TimeoutError:
+            result['error'] = "超时"
+            self.url_pool.record_url_failure(url)
+            self._record_error("超时")
+        except Exception as e:
+            result['error'] = str(e)
+            self.url_pool.record_url_failure(url)
+            self._record_error("其他错误")
+
+        if not result['success']:
+            self.fail_count += 1
+
+        result['duration'] = time.time() - start_time
+        self._record_speed(url, result)
+        return result
+
+    def _record_speed(self, url: str, result: Dict):
+        """记录下载速度"""
         if result['success'] and result['duration'] > 0:
             speed = (result['bytes_downloaded'] / (1024 * 1024)) / result['duration']
             self.speed_history.append(speed)
@@ -781,8 +869,6 @@ class MicroTaskDownloader:
             self.url_speed[url_name].append(speed)
             if len(self.url_speed[url_name]) > 20:
                 self.url_speed[url_name] = self.url_speed[url_name][-20:]
-
-        return result
 
     def _record_error(self, error_type: str):
         """记录错误类型"""
@@ -1452,7 +1538,7 @@ class TrafficPaddingService:
         self.config = Config(config_path)
         self.monitor = TrafficMonitor(self.config.get('interface', 'eth0'))
         self.url_pool = URLPool()
-        self.downloader = MicroTaskDownloader(self.url_pool)
+        self.downloader = MicroTaskDownloader(self.url_pool, self.config)
         self.scheduler = Scheduler(self.config)
         self.tg_notifier = TelegramNotifier(self.config)
         self.dingtalk_notifier = DingTalkNotifier(self.config)
@@ -1807,12 +1893,13 @@ class TrafficPaddingService:
         if should_run:
             url = self.url_pool.get_random_url()
             if url:
-                result = self.downloader.execute_micro_task(url, target_bytes)
+                result = self.downloader.execute_task(url, target_bytes)
                 if result['success']:
                     self.scheduler.record_usage(result['bytes_downloaded'])
                     self.record_download(result['bytes_downloaded'])  # 记录到统计
                     url_name = self.url_pool.get_url_name(url)
-                    log_message("INFO", f"下载 {result['bytes_downloaded'] / (1024*1024):.1f}MB 耗时 {result['duration']:.1f}s 来源:{url_name}")
+                    mode_str = "[长时]" if result.get('mode') == 'long' else "[短时]"
+                    log_message("INFO", f"下载 {result['bytes_downloaded'] / (1024*1024):.1f}MB 耗时 {result['duration']:.1f}s {mode_str} 来源:{url_name}")
 
                     # 首次任务完成时发送数据推送测试消息（仅一次）
                     if not self.first_task_done:

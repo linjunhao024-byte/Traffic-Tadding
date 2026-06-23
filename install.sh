@@ -857,6 +857,35 @@ get_auto_panel_status() {
     fi
 }
 
+get_download_mode() {
+    local mode=$(python3 -c "
+import json
+try:
+    with open('${CONFIG_DIR}/config.json') as f:
+        print(json.load(f).get('download_mode', 'short'))
+except:
+    print('short')
+" 2>/dev/null)
+    case "$mode" in
+        short) echo -e "${GREEN}短时${NC} (2-15MB)" ;;
+        long) echo -e "${YELLOW}长时${NC} (完整文件)" ;;
+        mixed) echo -e "${CYAN}长短结合${NC}" ;;
+        *) echo -e "${GREEN}短时${NC}" ;;
+    esac
+}
+
+set_download_mode() {
+    local mode="$1"
+    python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json', 'r') as f:
+    config = json.load(f)
+config['download_mode'] = '${mode}'
+with open('${CONFIG_DIR}/config.json', 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+" 2>/dev/null
+}
+
 do_traffic_monitor() {
     while true; do
         echo ""
@@ -1119,17 +1148,70 @@ main() {
         echo -e "${CYAN}|${NC}  ${CYAN}[12]${NC} 网卡测试     ${RED}[13]${NC} 卸载         ${GREEN}[14]${NC} 一键更新                      ${CYAN}|${NC}"
         echo -e "${CYAN}|${NC}  ${YELLOW}[15]${NC} 自动面板: $(get_auto_panel_status)                                                   ${CYAN}|${NC}"
         echo -e "${CYAN}|${NC}  ${GREEN}[16]${NC} 流量监控                                                               ${CYAN}|${NC}"
+        echo -e "${CYAN}|${NC}  ${MAGENTA}[17]${NC} 下载模式: $(get_download_mode)                                                ${CYAN}|${NC}"
         echo -e "${CYAN}+===========================================================================+${NC}"
         echo -e "${CYAN}|${NC}  ${CYAN}[0]${NC} 退出                                                                    ${CYAN}|${NC}"
         echo -e "${CYAN}+===========================================================================+${NC}"
         echo ""
-        echo -ne "  请选择 [0-16]: "
+        echo -ne "  请选择 [0-17]: "
         read choice
 
         case "$choice" in
             1)
                 echo ""
-                systemctl status "${SERVICE_NAME}" --no-pager
+                # 获取服务状态信息
+                local is_active=$(systemctl is-active "${SERVICE_NAME}" 2>/dev/null)
+                local is_enabled=$(systemctl is-enabled "${SERVICE_NAME}" 2>/dev/null)
+                local pid=$(systemctl show -p MainPID "${SERVICE_NAME}" 2>/dev/null | cut -d= -f2)
+                local memory=$(systemctl show -p MemoryCurrent "${SERVICE_NAME}" 2>/dev/null | cut -d= -f2)
+                local uptime=$(systemctl show -p ActiveEnterTimestamp "${SERVICE_NAME}" 2>/dev/null | cut -d= -f2)
+
+                # 格式化内存
+                if [[ -n "$memory" && "$memory" != "[not set]" ]]; then
+                    memory="$(( memory / 1024 / 1024 )) MB"
+                else
+                    memory="N/A"
+                fi
+
+                # 格式化运行时间
+                if [[ -n "$uptime" ]]; then
+                    local start_ts=$(date -d "$uptime" +%s 2>/dev/null)
+                    local now_ts=$(date +%s)
+                    local diff=$(( now_ts - start_ts ))
+                    local days=$(( diff / 86400 ))
+                    local hours=$(( (diff % 86400) / 3600 ))
+                    local mins=$(( (diff % 3600) / 60 ))
+                    if [[ $days -gt 0 ]]; then
+                        uptime="${days}天${hours}小时${mins}分钟"
+                    elif [[ $hours -gt 0 ]]; then
+                        uptime="${hours}小时${mins}分钟"
+                    else
+                        uptime="${mins}分钟"
+                    fi
+                else
+                    uptime="N/A"
+                fi
+
+                # 状态颜色
+                local status_color="${RED}"
+                [[ "$is_active" == "active" ]] && status_color="${GREEN}"
+
+                local boot_color="${YELLOW}"
+                [[ "$is_enabled" == "enabled" ]] && boot_color="${GREEN}"
+
+                # 显示格式化状态
+                echo -e "${CYAN}+===========================================================================+${NC}"
+                printf "${CYAN}|${NC}  ${BOLD}%-69s${NC}${CYAN}|${NC}\n" "服务状态"
+                echo -e "${CYAN}+---------------------------------------------------------------------------+${NC}"
+                printf "${CYAN}|${NC}  状态: ${status_color}%-10s${NC}  自启: ${boot_color}%-10s${NC}  PID: %-10s       ${CYAN}|${NC}\n" "$is_active" "$is_enabled" "$pid"
+                printf "${CYAN}|${NC}  内存: %-10s  运行时间: %-30s   ${CYAN}|${NC}\n" "$memory" "$uptime"
+                echo -e "${CYAN}+---------------------------------------------------------------------------+${NC}"
+                printf "${CYAN}|${NC}  ${BOLD}%-69s${NC}${CYAN}|${NC}\n" "最近日志 (5条)"
+                echo -e "${CYAN}+---------------------------------------------------------------------------+${NC}"
+                journalctl -u "${SERVICE_NAME}" -n 5 --no-pager -o cat | while IFS= read -r line; do
+                    format_log_line "$line"
+                done
+                echo -e "${CYAN}+===========================================================================+${NC}"
                 wait_key
                 ;;
             2)
@@ -1236,6 +1318,43 @@ with open('${CONFIG_DIR}/config.json') as f:
             16)
                 do_traffic_monitor
                 ;;
+            17)
+                echo ""
+                echo -e "${CYAN}+===========================================================================+${NC}"
+                printf "${CYAN}|${NC}  ${BOLD}%-69s${NC}${CYAN}|${NC}\n" "下载模式切换"
+                echo -e "${CYAN}+===========================================================================+${NC}"
+                echo -e "${CYAN}|${NC}                                                                    ${CYAN}|${NC}"
+                echo -e "${CYAN}|${NC}    ${GREEN}(a)${NC} 短时模式    下载 2-15MB，快速完成                              ${CYAN}|${NC}"
+                echo -e "${CYAN}|${NC}    ${YELLOW}(b)${NC} 长时模式    下载完整文件，持续 1-5 分钟                        ${CYAN}|${NC}"
+                echo -e "${CYAN}|${NC}    ${CYAN}(c)${NC} 长短结合    交替使用两种模式                                  ${CYAN}|${NC}"
+                echo -e "${CYAN}|${NC}                                                                    ${CYAN}|${NC}"
+                echo -e "${CYAN}|${NC}  ${DIM}短时模式：更隐蔽，流量可控${NC}                                          ${CYAN}|${NC}"
+                echo -e "${CYAN}|${NC}  ${DIM}长时模式：更真实，像人类下载${NC}                                        ${CYAN}|${NC}"
+                echo -e "${CYAN}|${NC}  ${DIM}长短结合：随机切换，兼顾隐蔽和真实${NC}                                  ${CYAN}|${NC}"
+                echo -e "${CYAN}|${NC}                                                                    ${CYAN}|${NC}"
+                echo -e "${CYAN}+===========================================================================+${NC}"
+                echo ""
+                echo -ne "  请选择 (a/b/c): "
+                read mode_choice
+                case "${mode_choice,,}" in
+                    a)
+                        set_download_mode "short"
+                        log_info "已切换到短时模式"
+                        ;;
+                    b)
+                        set_download_mode "long"
+                        log_info "已切换到长时模式"
+                        ;;
+                    c)
+                        set_download_mode "mixed"
+                        log_info "已切换到长短结合模式"
+                        ;;
+                    *)
+                        echo -e "  ${RED}无效选项${NC}"
+                        ;;
+                esac
+                wait_key
+                ;;
             0)
                 clear
                 exit 0
@@ -1300,7 +1419,8 @@ generate_config() {
     "dingtalk_monthly_reset_day": ${DINGTALK_MONTHLY_RESET_DAY},
     "qos_probe_enabled": true,
     "qos_probe_targets": ["https://www.google.co.jp", "https://www.yahoo.co.jp", "https://www.amazon.co.jp"],
-    "qos_probe_count": 5
+    "qos_probe_count": 5,
+    "download_mode": "short"
 }
 EOF
     echo -e "${CYAN}|${NC}  ${GREEN}[✓]${NC} 配置: ${CONFIG_DIR}/config.json                               ${CYAN}|${NC}"
