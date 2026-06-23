@@ -779,6 +779,143 @@ get_auto_panel_status() {
     fi
 }
 
+do_traffic_monitor() {
+    while true; do
+        echo ""
+        echo -e "${CYAN}+======================================================================+${NC}"
+        echo -e "${CYAN}|${NC}  ${BOLD}流量监控${NC}                                                               ${CYAN}|${NC}"
+        echo -e "${CYAN}+======================================================================+${NC}"
+        echo -e "${CYAN}|${NC}                                                                    ${CYAN}|${NC}"
+        echo -e "${CYAN}|${NC}    ${CYAN}(a)${NC} 今日                                                              ${CYAN}|${NC}"
+        echo -e "${CYAN}|${NC}    ${CYAN}(b)${NC} 本周                                                              ${CYAN}|${NC}"
+        echo -e "${CYAN}|${NC}    ${CYAN}(c)${NC} 本月                                                              ${CYAN}|${NC}"
+        echo -e "${CYAN}|${NC}    ${CYAN}(d)${NC} 启用至今                                                          ${CYAN}|${NC}"
+        echo -e "${CYAN}|${NC}                                                                    ${CYAN}|${NC}"
+        echo -e "${CYAN}|${NC}    ${CYAN}(0)${NC} 返回                                                              ${CYAN}|${NC}"
+        echo -e "${CYAN}|${NC}                                                                    ${CYAN}|${NC}"
+        echo -e "${CYAN}+======================================================================+${NC}"
+        echo ""
+        echo -ne "  请选择 (a/b/c/d/0): "
+        read period_choice
+
+        case "${period_choice,,}" in
+            a|b|c|d)
+                local period=""
+                case "${period_choice,,}" in
+                    a) period="daily" ;;
+                    b) period="weekly" ;;
+                    c) period="monthly" ;;
+                    d) period="total" ;;
+                esac
+
+                # 调用 Python 获取流量数据并绘制柱状图
+                python3 << PYEOF
+import json
+import os
+from datetime import datetime, timedelta
+
+CONFIG_DIR = "${CONFIG_DIR}"
+TRAFFIC_HISTORY_FILE = os.path.join(CONFIG_DIR, "traffic_history.json")
+
+def load_history():
+    try:
+        with open(TRAFFIC_HISTORY_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return []
+
+def get_period_summary(history, period):
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if period == 'daily':
+        start_time = today_start.timestamp()
+        label = now.strftime('%m月%d日')
+    elif period == 'weekly':
+        monday = today_start - timedelta(days=today_start.weekday())
+        start_time = monday.timestamp()
+        label = f"本周 ({monday.strftime('%m/%d')}-{now.strftime('%m/%d')})"
+    elif period == 'monthly':
+        month_start = today_start.replace(day=1)
+        start_time = month_start.timestamp()
+        label = now.strftime('%Y年%m月')
+    else:
+        start_time = 0
+        label = "启用至今"
+
+    period_data = [h for h in history if h.get('timestamp', 0) >= start_time]
+
+    if not period_data or len(period_data) < 2:
+        return None
+
+    first = period_data[0]
+    last = period_data[-1]
+
+    rx_delta = max(0, last.get('rx_bytes', 0) - first.get('rx_bytes', 0))
+    tx_delta = max(0, last.get('tx_bytes', 0) - first.get('tx_bytes', 0))
+    download_delta = max(0, last.get('download_bytes', 0) - first.get('download_bytes', 0))
+
+    return {
+        'label': label,
+        'rx_mb': rx_delta / (1024 * 1024),
+        'tx_mb': tx_delta / (1024 * 1024),
+        'download_mb': download_delta / (1024 * 1024),
+    }
+
+def draw_bar(label, value, max_value, width=40):
+    if max_value <= 0:
+        filled = 0
+    else:
+        filled = int((value / max_value) * width)
+    bar = '█' * filled + '░' * (width - filled)
+    return f"  {label:12s} {bar}  {value:>8.1f} MB"
+
+history = load_history()
+summary = get_period_summary(history, "${period}")
+
+if not summary:
+    print()
+    print("  +----------------------------------------------------------------------+")
+    print("  |  流量监控                                                            |")
+    print("  +----------------------------------------------------------------------+")
+    print("  |                                                                      |")
+    print("  |    数据不足，请等待一段时间后再查看                                   |")
+    print("  |                                                                      |")
+    print("  +----------------------------------------------------------------------+")
+else:
+    max_val = max(summary['rx_mb'], summary['tx_mb'], summary['download_mb'], 1)
+    ratio_str = "1:{:.1f}".format(summary['rx_mb'] / summary['tx_mb']) if summary['tx_mb'] > 0 else "N/A"
+
+    print()
+    print(f"  +----------------------------------------------------------------------+")
+    print(f"  |  流量监控 - {summary['label']:<54s}  |")
+    print(f"  +----------------------------------------------------------------------+")
+    print(f"  |                                                                      |")
+    print(f"  |{draw_bar('上行 (TX)', summary['tx_mb'], max_val)}   |")
+    print(f"  |                                                                      |")
+    print(f"  |{draw_bar('下行 (RX)', summary['rx_mb'], max_val)}   |")
+    print(f"  |                                                                      |")
+    print(f"  |{draw_bar('填充下载', summary['download_mb'], max_val)}   |")
+    print(f"  |                                                                      |")
+    print(f"  +----------------------------------------------------------------------+")
+    print(f"  |  比例: {ratio_str:<10s}  目标: 1:{summary['rx_mb']/summary['tx_mb'] if summary['tx_mb'] > 0 else 0:.1f}                                  |")
+    print(f"  +----------------------------------------------------------------------+")
+PYEOF
+                echo ""
+                echo -ne "  按 Enter 返回..."
+                read -r
+                ;;
+            0)
+                return
+                ;;
+            *)
+                echo -e "  ${RED}无效选项${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 do_update() {
     echo ""
     echo -e "${CYAN}+--------------------------------------------------------------+${NC}"
@@ -862,11 +999,12 @@ main() {
         printf "${CYAN}|${NC}  ${CYAN}[9]${NC} %-10s ${CYAN}[10]${NC} %-10s ${CYAN}[11]${NC} %-$(($line_width-38))s${CYAN}|${NC}\n" "编辑配置" "开机自启" "取消自启"
         printf "${CYAN}|${NC}  ${CYAN}[12]${NC} %-9s ${RED}[13]${NC} %-11s ${GREEN}[14]${NC} %-$(($line_width-38))s${CYAN}|${NC}\n" "网卡测试" "卸载" "一键更新"
         printf "${CYAN}|${NC}  ${YELLOW}[15]${NC} 自动面板: %-$(($line_width-18))s${CYAN}|${NC}\n" "$(get_auto_panel_status)"
+        printf "${CYAN}|${NC}  ${GREEN}[16]${NC} %-$(($line_width-6))s${CYAN}|${NC}\n" "流量监控"
         echo -e "${CYAN}+$(printf '=%.0s' $(seq 1 $line_width))+${NC}"
         printf "${CYAN}|${NC}  ${CYAN}[0]${NC} %-$(($line_width-6))s${CYAN}|${NC}\n" "退出"
         echo -e "${CYAN}+$(printf '=%.0s' $(seq 1 $line_width))+${NC}"
         echo ""
-        echo -ne "  请选择 [0-15]: "
+        echo -ne "  请选择 [0-16]: "
         read choice
 
         case "$choice" in
@@ -966,6 +1104,9 @@ with open('${CONFIG_DIR}/config.json') as f:
                     log_info "已开启自动面板（下次登录生效）"
                 fi
                 wait_key
+                ;;
+            16)
+                do_traffic_monitor
                 ;;
             0)
                 clear

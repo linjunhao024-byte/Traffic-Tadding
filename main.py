@@ -27,6 +27,7 @@ from typing import Dict, List, Optional, Tuple
 CONFIG_FILE = "/etc/traffic-padding/config.json"
 USAGE_FILE = "/etc/traffic-padding/usage.json"
 STATS_FILE = "/etc/traffic-padding/stats.json"
+TRAFFIC_HISTORY_FILE = "/etc/traffic-padding/traffic_history.json"
 QOS_STATS_FILE = "/etc/traffic-padding/qos_stats.json"
 URL_POOL_REFRESH_INTERVAL = 86400
 HTTP_TIMEOUT = 15
@@ -34,6 +35,7 @@ SLIDING_WINDOW_SIZE = 5
 CONFIG_RELOAD_INTERVAL = 300
 TG_CHECK_INTERVAL = 3600
 QOS_CHECK_INTERVAL = 600  # QoS 检测间隔（秒）
+TRAFFIC_RECORD_INTERVAL = 300  # 流量记录间隔（秒）
 
 # URL 中文名称映射
 URL_NAME_MAP = {
@@ -1391,6 +1393,114 @@ class TrafficPaddingService:
         # QoS 探测结果缓存
         self._cached_qos_result = None
 
+        # 流量历史记录
+        self.traffic_history_file = TRAFFIC_HISTORY_FILE
+        self.traffic_history: List[Dict] = []
+        self._load_traffic_history()
+        self.last_traffic_record = 0
+
+    def _load_traffic_history(self):
+        """加载流量历史记录"""
+        try:
+            if os.path.exists(self.traffic_history_file):
+                with open(self.traffic_history_file, 'r', encoding='utf-8') as f:
+                    self.traffic_history = json.load(f)
+                    # 只保留最近 90 天的数据
+                    cutoff = time.time() - 90 * 86400
+                    self.traffic_history = [h for h in self.traffic_history if h.get('timestamp', 0) > cutoff]
+        except (json.JSONDecodeError, IOError):
+            self.traffic_history = []
+
+    def _save_traffic_history(self):
+        """保存流量历史记录"""
+        try:
+            os.makedirs(os.path.dirname(self.traffic_history_file), exist_ok=True)
+            # 只保留最近 10000 条记录
+            if len(self.traffic_history) > 10000:
+                self.traffic_history = self.traffic_history[-10000:]
+            with open(self.traffic_history_file, 'w', encoding='utf-8') as f:
+                json.dump(self.traffic_history, f, indent=2)
+        except (IOError, OSError):
+            pass
+
+    def record_traffic_snapshot(self):
+        """记录当前流量快照"""
+        now = time.time()
+        if now - self.last_traffic_record < TRAFFIC_RECORD_INTERVAL:
+            return
+        self.last_traffic_record = now
+
+        net_stats = self.get_network_stats()
+        stats = self.downloader.get_stats()
+
+        snapshot = {
+            'timestamp': now,
+            'rx_bytes': net_stats['rx_bytes'],
+            'tx_bytes': net_stats['tx_bytes'],
+            'rx_mb': net_stats['rx_mb'],
+            'tx_mb': net_stats['tx_mb'],
+            'download_bytes': self.total_downloaded_all_time,
+            'download_mb': stats['total_downloaded_mb'],
+            'task_count': stats['task_count'],
+        }
+
+        self.traffic_history.append(snapshot)
+        self._save_traffic_history()
+
+    def get_traffic_summary(self, period: str) -> Dict:
+        """获取指定时间段的流量汇总"""
+        now = datetime.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        if period == 'daily':
+            # 今日 00:00 到现在
+            start_time = today_start.timestamp()
+            label = f"{now.strftime('%m月%d日')}"
+        elif period == 'weekly':
+            # 本周一 00:00 到现在
+            monday = today_start - timedelta(days=today_start.weekday())
+            start_time = monday.timestamp()
+            label = f"本周 ({monday.strftime('%m/%d')}-{now.strftime('%m/%d')})"
+        elif period == 'monthly':
+            # 本月1号 00:00 到现在
+            month_start = today_start.replace(day=1)
+            start_time = month_start.timestamp()
+            label = f"{now.strftime('%Y年%m月')}"
+        else:  # total
+            # 从最早记录开始
+            start_time = 0
+            label = "启用至今"
+
+        # 过滤指定时间段的数据
+        period_data = [h for h in self.traffic_history if h.get('timestamp', 0) >= start_time]
+
+        if not period_data:
+            return {
+                'label': label,
+                'rx_mb': 0,
+                'tx_mb': 0,
+                'download_mb': 0,
+                'task_count': 0,
+                'records': 0,
+            }
+
+        # 计算差值（相对于时间段开始）
+        first = period_data[0]
+        last = period_data[-1]
+
+        rx_delta = last.get('rx_bytes', 0) - first.get('rx_bytes', 0)
+        tx_delta = last.get('tx_bytes', 0) - first.get('tx_bytes', 0)
+        download_delta = last.get('download_bytes', 0) - first.get('download_bytes', 0)
+
+        return {
+            'label': label,
+            'rx_mb': max(0, rx_delta / (1024 * 1024)),
+            'tx_mb': max(0, tx_delta / (1024 * 1024)),
+            'download_mb': max(0, download_delta / (1024 * 1024)),
+            'task_count': last.get('task_count', 0),
+            'records': len(period_data),
+        }
+
     def _init_network_baseline(self):
         """初始化网卡流量基准"""
         try:
@@ -1629,6 +1739,9 @@ class TrafficPaddingService:
 
         if self.cycle_count % 20 == 0:
             self._log_stats()
+
+        # 记录流量快照
+        self.record_traffic_snapshot()
 
         # 手动推送请求处理
         if self.manual_report_requested:
