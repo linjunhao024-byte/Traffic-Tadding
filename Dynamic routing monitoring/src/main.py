@@ -17,6 +17,7 @@ from baseline import compute_baseline, check_anomaly, check_path_change, check_s
 from alerter import send_alert, build_alert_message, build_daily_report
 from tg_bot import TelegramBot
 from geoip import get_path_countries
+from web import start_web_server
 
 running = True
 tg_bot = None
@@ -209,6 +210,14 @@ def main():
         tg_bot = TelegramBot(tg_cfg["bot_token"], tg_cfg["chat_id"], db, config)
         tg_bot.start_polling()
         logger.info("Telegram bot started")
+
+    # 启动 Web 服务器
+    web_cfg = config.get("web", {})
+    if web_cfg.get("enabled", True):
+        web_thread = start_web_server(db, config)
+        if web_thread:
+            web_port = web_cfg.get("port", 8080)
+            logger.info(f"Web dashboard: http://0.0.0.0:{web_port}")
 
     logger.info(f"{'='*50}")
     logger.info(f"AWS Route Monitor - {server_name}")

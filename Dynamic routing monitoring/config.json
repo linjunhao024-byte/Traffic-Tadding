@@ -61,6 +61,12 @@
     "cleanup_days": 30
   },
 
+  "web": {
+    "enabled": true,
+    "port": 8080,
+    "host": "0.0.0.0"
+  },
+
   "log": {
     "level": "INFO",
     "file": "monitor.log",
