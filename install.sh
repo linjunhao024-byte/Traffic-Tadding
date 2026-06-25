@@ -1372,16 +1372,31 @@ do_update() {
     echo -e "${CYAN}+--------------------------------------------------------------+${NC}"
     echo ""
 
-    # 检测是否能访问 GitHub
+    # 检测是否能访问 GitHub（加时间戳防缓存）
     local mirror_url="https://ghfast.top/"
+    local cache_bust="?t=$(date +%s)"
     if curl -s --connect-timeout 3 https://raw.githubusercontent.com > /dev/null 2>&1; then
         mirror_url=""
+        cache_bust=""
     fi
 
     # 下载 main.py
     echo -ne "  下载 main.py..."
-    if curl -sL "${mirror_url}https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/main.py" -o /tmp/main.py.new; then
-        echo -e " ${GREEN}✓${NC}"
+    if curl -sL "${mirror_url}https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/main.py${cache_bust}" -o /tmp/main.py.new; then
+        # 验证文件有效性
+        if grep -q "class BandwidthMonitor" /tmp/main.py.new && grep -q "class TrafficPaddingService" /tmp/main.py.new; then
+            echo -e " ${GREEN}✓${NC}"
+        else
+            echo -e " ${RED}✗ (文件无效，可能镜像缓存)${NC}"
+            echo -e "  ${YELLOW}尝试直连 GitHub...${NC}"
+            if curl -sL "https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/main.py" -o /tmp/main.py.new && grep -q "class BandwidthMonitor" /tmp/main.py.new; then
+                echo -e "  ${GREEN}✓ 直连成功${NC}"
+            else
+                echo -e "  ${RED}✗ 下载失败${NC}"
+                wait_key
+                return 1
+            fi
+        fi
     else
         echo -e " ${RED}✗${NC}"
         echo -e "  ${RED}下载失败，请检查网络${NC}"
@@ -1391,8 +1406,20 @@ do_update() {
 
     # 下载 install.sh
     echo -ne "  下载 install.sh..."
-    if curl -sL "${mirror_url}https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/install.sh" -o /tmp/install.sh.new; then
-        echo -e " ${GREEN}✓${NC}"
+    if curl -sL "${mirror_url}https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/install.sh${cache_bust}" -o /tmp/install.sh.new; then
+        if grep -q "do_update" /tmp/install.sh.new; then
+            echo -e " ${GREEN}✓${NC}"
+        else
+            echo -e " ${RED}✗ (文件无效)${NC}"
+            echo -e "  ${YELLOW}尝试直连 GitHub...${NC}"
+            if curl -sL "https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/install.sh" -o /tmp/install.sh.new && grep -q "do_update" /tmp/install.sh.new; then
+                echo -e "  ${GREEN}✓ 直连成功${NC}"
+            else
+                echo -e "  ${RED}✗ 下载失败${NC}"
+                wait_key
+                return 1
+            fi
+        fi
     else
         echo -e " ${RED}✗${NC}"
         echo -e "  ${RED}下载失败，请检查网络${NC}"
