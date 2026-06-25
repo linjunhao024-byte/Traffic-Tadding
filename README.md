@@ -130,7 +130,9 @@ cd /tmp && rm -f install.sh main.py && wget -q https://ghfast.top/https://raw.gi
 ├─────────────────────┴─────────────────────┴─────────────────────┤
 │  系统管理                                                        │
 ├─────────────────────────────────────────────────────────────────┤
-│  [10] 开机自启    [11] 取消自启    [12] 网卡测试    [13] 卸载     │
+│  [10] 开机自启      [12] 卸载        [14] 自动面板               │
+│  [11] 网卡与下载    [13] 一键更新    [15] 流量与带宽              │
+│  [16] 告警设置      [17] AI 分析                                  │
 ├─────────────────────────────────────────────────────────────────┤
 │  [0] 退出                                                        │
 └─────────────────────────────────────────────────────────────────┘
@@ -151,7 +153,15 @@ Traffic-Tadding/                   /opt/traffic-padding/
                                    /etc/traffic-padding/
                                    ├── config.json
                                    ├── usage.json
-                                   └── url_health.json
+                                   ├── url_health.json
+                                   ├── notify.json           ← 通知开关配置
+                                   ├── ai_analysis.json      ← AI 分析缓存
+                                   ├── stats.json            ← 历史统计
+                                   ├── traffic_history.json  ← 流量历史
+                                   ├── qos_stats.json        ← QoS 探测历史
+                                   └── logs/                 ← 带宽监控 CSV 日志
+                                       ├── bandwidth_20260626.csv
+                                       └── ...
 ```
 
 ---
@@ -194,7 +204,21 @@ Traffic-Tadding/                   /opt/traffic-padding/
         "https://dl.google.com",     // Google（跨境）
         "https://www.apple.com"      // Apple（跨境）
     ],
-    "qos_probe_count": 5              // 每次探测的请求次数
+    "qos_probe_count": 5,             // 每次探测的请求次数
+
+    // ── 带宽监控 ──
+    "monitor_enabled": true,          // 启用带宽监控线程（1秒采样，1分钟写CSV）
+    "alert_enabled": false,           // 启用带宽告警
+    "alert_threshold_mbps": 50,       // 告警阈值（Mbps）
+    "alert_cooldown": 180,            // 告警冷却时间（秒）
+    "alert_recovery": true,           // 带宽恢复时发送通知
+    "csv_log_dir": "/etc/traffic-padding/logs",  // CSV 日志目录
+
+    // ── AI 分析 ──
+    "ai_enabled": true,               // 启用 AI 分析（每小时自动调用）
+    "ai_api_key": "your-api-key",     // DeepSeek API Key
+    "ai_base_url": "https://api-x4l639rbh7gdz1pa.aistudio-app.com/v1",  // API 地址
+    "ai_model": "DeepSeek-R1-Distill-Llama-8B-F16"  // 模型名称
 }
 ```
 
@@ -233,7 +257,15 @@ Traffic-Tadding/                   /opt/traffic-padding/
 
 🕐 2026-06-22 23:00
 
-📊 用量统计
+📊 带宽监控
+├ 入站峰值: 85.2 Mbps (14:32)
+├ 出站峰值: 42.1 Mbps (09:15)
+├ 入站平均: 12.3 Mbps
+├ 出站平均: 8.7 Mbps
+├ 总流量: RX 1.20 GB / TX 0.80 GB
+└ 告警: 0 次
+
+📦 流量填充
 ├ 今日: 0.123 GB
 ├ 累计总量: 12.345 GB
 ├ 今日配额: 0.568 / 10.0 GB
@@ -266,6 +298,10 @@ Traffic-Tadding/                   /opt/traffic-padding/
 ├ 网卡: eth0
 ├ 比例: 1:3
 └ 权重: 1.00x
+
+🤖 AI 分析
+入站流量峰值 85.2Mbps 偏高，出站流量正常。
+建议关注入站流量来源，可能是突发访问或爬虫。
 ```
 
 ### 报告频率
@@ -297,6 +333,11 @@ Traffic-Tadding/                   /opt/traffic-padding/
 | 配额预测 | 预估配额用完时间 |
 | 手动推送 | 管理菜单一键推送当前状态 |
 | QoS 探测 | 检测跨境网络拥堵，自动告警 |
+| 带宽监控 | 1 秒采样，1 分钟写 CSV，峰值/均值/流量统计 |
+| 实时告警 | 带宽超阈值钉钉推送，冷却+恢复通知 |
+| AI 分析 | 每小时自动调用 DeepSeek 分析流量，结果注入报告 |
+| 通知管理 | 8 种通知独立开关，tpm 菜单可视化管理 |
+| 周报清日志 | 周报发送成功后自动清理 7 天 CSV 日志 |
 
 ---
 
