@@ -561,6 +561,7 @@ do_uninstall() {
 }
 
 log_info() { echo -e "  ${GREEN}[✓]${NC} $1"; }
+log_step() { echo -e "  ${BLUE}[→]${NC} $1"; }
 
 CMD_NAME="$(basename "$0")"
 
