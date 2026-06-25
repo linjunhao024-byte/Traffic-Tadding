@@ -1802,9 +1802,9 @@ with open('${CONFIG_DIR}/config.json','w') as f: json.dump(c,f,indent=2,ensure_a
                                 systemctl kill -s SIGUSR2 "${SERVICE_NAME}" 2>/dev/null
                                 echo ""
                                 log_info "已发送分析请求，请稍候..."
-                                # 等待结果
+                                # 等待结果（最多 120 秒）
                                 local wait_count=0
-                                while [[ $wait_count -lt 30 ]]; do
+                                while [[ $wait_count -lt 60 ]]; do
                                     sleep 2
                                     wait_count=$((wait_count + 1))
                                     local new_time=$(python3 -c "
@@ -1825,8 +1825,9 @@ else:
                                         break
                                     fi
                                 done
-                                if [[ $wait_count -ge 30 ]]; then
-                                    echo -e "  ${YELLOW}分析超时（可能模型响应较慢），结果将在后台保存${NC}"
+                                if [[ $wait_count -ge 60 ]]; then
+                                    echo -e "  ${YELLOW}分析超时，模型可能正在加载，结果将在后台自动保存${NC}"
+                                    echo -e "  ${DIM}稍后选 [3] 查看结果，或查看日志: journalctl -u traffic-padding -f${NC}"
                                 fi
                             else
                                 echo ""
