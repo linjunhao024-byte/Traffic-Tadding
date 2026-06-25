@@ -672,6 +672,8 @@ print(c.get('tg_enabled', False))
 print(c.get('dingtalk_enabled', False))
 print(c.get('tg_report_freq', c.get('dingtalk_report_freq', 'daily')))
 print(c.get('tg_report_hour', c.get('dingtalk_report_hour', 23)))
+print(c.get('ai_base_url', 'https://api.openai.com/v1'))
+print(c.get('ai_model', 'gpt-4o-mini'))
 " 2>/dev/null)
 
         local server_name=$(echo "$config_data" | sed -n '1p')
@@ -682,6 +684,8 @@ print(c.get('tg_report_hour', c.get('dingtalk_report_hour', 23)))
         local dt_enabled=$(echo "$config_data" | sed -n '6p')
         local freq=$(echo "$config_data" | sed -n '7p')
         local hour=$(echo "$config_data" | sed -n '8p')
+        local ai_base_url=$(echo "$config_data" | sed -n '9p')
+        local ai_model=$(echo "$config_data" | sed -n '10p')
 
         local push_status="未启用"
         [[ "$tg_enabled" == "True" ]] && push_status="Telegram"
@@ -706,14 +710,17 @@ print(c.get('tg_report_hour', c.get('dingtalk_report_hour', 23)))
         printf "${CYAN}|${NC}    ${CYAN}[5]${NC} 推送方式    ${GREEN}%-40s${NC}${CYAN}|${NC}\n" "${push_status}"
         printf "${CYAN}|${NC}    ${CYAN}[6]${NC} 报告频率    ${GREEN}%-40s${NC}${CYAN}|${NC}\n" "${freq_label}"
         printf "${CYAN}|${NC}    ${CYAN}[7]${NC} 推送时间    ${GREEN}%-40s${NC}${CYAN}|${NC}\n" "每日 ${hour}:00"
-        echo -e "${CYAN}|${NC}    ${CYAN}[8]${NC} 通知管理                                                         ${CYAN}|${NC}"
         echo -e "${CYAN}|${NC}                                                            ${CYAN}|${NC}"
-        echo -e "${CYAN}|${NC}    ${CYAN}[9]${NC} 打开编辑器（高级）                                      ${CYAN}|${NC}"
+        printf "${CYAN}|${NC}    ${CYAN}[8]${NC} API 地址    ${GREEN}%-40s${NC}${CYAN}|${NC}\n" "${ai_base_url}"
+        printf "${CYAN}|${NC}    ${CYAN}[9]${NC} 模型名      ${GREEN}%-40s${NC}${CYAN}|${NC}\n" "${ai_model}"
+        echo -e "${CYAN}|${NC}                                                            ${CYAN}|${NC}"
+        echo -e "${CYAN}|${NC}    ${CYAN}[10]${NC} 通知管理                                                        ${CYAN}|${NC}"
+        echo -e "${CYAN}|${NC}    ${CYAN}[11]${NC} 打开编辑器（高级）                                     ${CYAN}|${NC}"
         echo -e "${CYAN}|${NC}    ${CYAN}[0]${NC} 返回                                                        ${CYAN}|${NC}"
         echo -e "${CYAN}|${NC}                                                            ${CYAN}|${NC}"
         echo -e "${CYAN}+--------------------------------------------------------------+${NC}"
         echo ""
-        echo -ne "  请选择 [0-8]: "
+        echo -ne "  请选择 [0-11]: "
         read edit_choice
 
         case "$edit_choice" in
@@ -885,6 +892,38 @@ with open('${CONFIG_DIR}/config.json', 'w') as f:
                 fi
                 ;;
             8)
+                # API 地址
+                echo -ne "  新 API 地址 [当前: ${ai_base_url}]: "
+                read new_url
+                if [[ -n "$new_url" ]]; then
+                    python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json', 'r') as f:
+    config = json.load(f)
+config['ai_base_url'] = '${new_url}'
+with open('${CONFIG_DIR}/config.json', 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+"
+                    log_info "已更新 API 地址"
+                fi
+                ;;
+            9)
+                # 模型名
+                echo -ne "  新模型名 [当前: ${ai_model}]: "
+                read new_model
+                if [[ -n "$new_model" ]]; then
+                    python3 -c "
+import json
+with open('${CONFIG_DIR}/config.json', 'r') as f:
+    config = json.load(f)
+config['ai_model'] = '${new_model}'
+with open('${CONFIG_DIR}/config.json', 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+"
+                    log_info "已更新模型名"
+                fi
+                ;;
+            10)
                 # 通知管理
                 while true; do
                     echo ""
@@ -959,7 +998,7 @@ with open(nf, 'w') as f: json.dump(n, f, indent=2, ensure_ascii=False)
                     esac
                 done
                 ;;
-            9)
+            11)
                 ${EDITOR:-nano} "${CONFIG_DIR}/config.json"
                 ;;
             0)
