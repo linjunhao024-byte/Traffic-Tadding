@@ -705,11 +705,9 @@ class AIAnalyzer:
         url = base_url.rstrip('/') + self.API_PATH
 
         prompt = (
-            "你是服务器流量分析助手。请根据以下数据回答三个问题：\n"
-            "1. 流量是否正常？（正常/异常）\n"
-            "2. 主要问题是什么？（一句话）\n"
-            "3. 建议怎么做？（一句话）\n"
-            "严格控制在100字以内，不要复述原始数据。\n\n"
+            "你是服务器流量分析助手。根据以下数据：\n"
+            "1.判断流量是否正常(正常/异常) 2.指出具体问题 3.给一条可操作建议\n"
+            "用中文回答，80字以内，不要复述数据。\n\n"
             f"{data_summary}"
         )
 
@@ -1805,10 +1803,10 @@ class BaseNotifier:
             period = service.get_period_stats('monthly')
             monthly_used_gb = period['gb']
             if self.monthly_quota_gb == -1:
-                monthly_str = f"\n├ 月总额度: 无限\n└ 已消耗: {monthly_used_gb:.3f} GB"
+                monthly_str = f"\n  月总额度: 无限\n  已消耗: {monthly_used_gb:.3f} GB"
             elif self.monthly_quota_gb > 0:
                 monthly_pct = (monthly_used_gb / self.monthly_quota_gb) * 100
-                monthly_str = f"\n├ 月总额度: {self.monthly_quota_gb:.1f} GB\n├ 已消耗: {monthly_used_gb:.3f} GB\n└ 占比: {monthly_pct:.2f}%"
+                monthly_str = f"\n  月总额度: {self.monthly_quota_gb:.1f} GB\n  已消耗: {monthly_used_gb:.3f} GB\n  占比: {monthly_pct:.2f}%"
 
         # 下载速度
         avg_speed = service.downloader.get_avg_speed()
@@ -2171,45 +2169,53 @@ class DingTalkNotifier(BaseNotifier):
         if d['ai_analysis']:
             ai_str = f"\n\n### 🤖 AI 分析\n{d['ai_analysis']}"
 
-        return f"""## 📋 Traffic Padding {d['freq_label']}
-
----
-
-**🖥️ {d['server_name']}**
-
-🕐 **{d['now'].strftime("%Y-%m-%d %H:%M")}**
-{bw_str}
-
-### 📦 流量填充
-- {period_str}
-- 累计总量: {d['total_gb']:.3f} GB
-- 今日配额: {d['quota_used'] / (1024**3):.3f} / {d['daily_quota_gb']:.1f} GB{d['monthly_str']}
-
-### 📈 下载性能
-- 平均速度: {d['avg_speed']:.2f} MB/s
-- 最快来源: {d['fastest'][0]} ({d['fastest'][1]:.1f} MB/s)
-- 最慢来源: {d['slowest'][0]} ({d['slowest'][1]:.1f} MB/s)
-
-### 📊 流量对比
-- 实际 RX: {d['net_stats']['rx_mb']:.1f} MB
-- 实际 TX: {d['net_stats']['tx_mb']:.1f} MB
-- 填充下载: {d['stats']['total_downloaded_mb']:.1f} MB
-- 填充占比: {d['fill_ratio']:.1f}%
-
-### 🔗 URL 状态
-- 总数: {d['url_count']} 个{url_health_str}
-- 成功: {d['stats']['success_count']} 次
-- 失败: {d['stats']['fail_count']} 次{error_str}{qos_str}{chart_str}
-
-### 📈 运行状态
-- 周期: {d['cycle_count']}
-- 任务: {d['stats']['task_count']}
-- 时长: {d['uptime']}
-
-### ⚙️ 配置
-- 网卡: {d['interface']}
-- 比例: 1:{d['target_ratio']}
-- 权重: {d['time_weight']:.2f}x{ai_str}"""
+        # 确保各段之间有空行
+        sections = [f"## 📋 Traffic Padding {d['freq_label']}", ""]
+        sections.append(f"**🖥️ {d['server_name']}**")
+        sections.append(f"🕐 **{d['now'].strftime('%Y-%m-%d %H:%M')}**")
+        if bw_str:
+            sections.append(bw_str)
+        sections.append("")
+        sections.append(f"### 📦 流量填充")
+        sections.append(f"- {period_str}")
+        sections.append(f"- 累计总量: {d['total_gb']:.3f} GB")
+        sections.append(f"- 今日配额: {d['quota_used'] / (1024**3):.3f} / {d['daily_quota_gb']:.1f} GB{d['monthly_str']}")
+        sections.append("")
+        sections.append(f"### 📈 下载性能")
+        sections.append(f"- 平均速度: {d['avg_speed']:.2f} MB/s")
+        sections.append(f"- 最快来源: {d['fastest'][0]} ({d['fastest'][1]:.1f} MB/s)")
+        sections.append(f"- 最慢来源: {d['slowest'][0]} ({d['slowest'][1]:.1f} MB/s)")
+        sections.append("")
+        sections.append(f"### 📊 流量对比")
+        sections.append(f"- 实际 RX: {d['net_stats']['rx_mb']:.1f} MB")
+        sections.append(f"- 实际 TX: {d['net_stats']['tx_mb']:.1f} MB")
+        sections.append(f"- 填充下载: {d['stats']['total_downloaded_mb']:.1f} MB")
+        sections.append(f"- 填充占比: {d['fill_ratio']:.1f}%")
+        sections.append("")
+        sections.append(f"### 🔗 URL 状态")
+        sections.append(f"- 总数: {d['url_count']} 个{url_health_str}")
+        sections.append(f"- 成功: {d['stats']['success_count']} 次")
+        sections.append(f"- 失败: {d['stats']['fail_count']} 次{error_str}")
+        if qos_str:
+            sections.append("")
+            sections.append(qos_str)
+        if chart_str:
+            sections.append("")
+            sections.append(chart_str)
+        sections.append("")
+        sections.append(f"### 📈 运行状态")
+        sections.append(f"- 周期: {d['cycle_count']}")
+        sections.append(f"- 任务: {d['stats']['task_count']}")
+        sections.append(f"- 时长: {d['uptime']}")
+        sections.append("")
+        sections.append(f"### ⚙️ 配置")
+        sections.append(f"- 网卡: {d['interface']}")
+        sections.append(f"- 比例: 1:{d['target_ratio']}")
+        sections.append(f"- 权重: {d['time_weight']:.2f}x")
+        if ai_str:
+            sections.append("")
+            sections.append(ai_str)
+        return "\n".join(sections)
 
 
 # ============================================================================
