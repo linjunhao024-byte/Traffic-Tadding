@@ -1178,21 +1178,12 @@ do_traffic_monitor() {
                     d) period="total" ;;
                 esac
 
-                # 调用 Python 获取流量数据并绘制柱状图
+                # 用带宽监控CSV + daily_stats 绘制柱状图
                 python3 << PYEOF
-import json
-import os
+import json, os, glob
 from datetime import datetime, timedelta
 
 CONFIG_DIR = "${CONFIG_DIR}"
-TRAFFIC_HISTORY_FILE = os.path.join(CONFIG_DIR, "traffic_history.json")
-
-def load_history():
-    try:
-        with open(TRAFFIC_HISTORY_FILE, 'r') as f:
-            return json.load(f)
-    except:
-        return []
 
 def load_config():
     try:
@@ -1201,73 +1192,38 @@ def load_config():
     except:
         return {}
 
-def get_period_summary(history, period):
-    now = datetime.now()
-    config = load_config()
+def get_csv_traffic(csv_dir, start_date, end_date):
+    """从CSV文件汇总流量（字节）"""
+    rx_total = 0
+    tx_total = 0
+    current = start_date
+    while current <= end_date:
+        csv_file = os.path.join(csv_dir, f"bandwidth_{current}.csv")
+        if os.path.exists(csv_file):
+            try:
+                with open(csv_file) as f:
+                    for line in f.readlines()[1:]:
+                        parts = line.strip().split(',')
+                        if len(parts) >= 7:
+                            # rx_avg Mbps * 60秒 = 每分钟流量(Mbit) / 8 = 字节(MB) * 1024*1024
+                            rx_total += float(parts[4]) * 60 * 1000000 / 8
+                            tx_total += float(parts[5]) * 60 * 1000000 / 8
+            except: pass
+        try:
+            dt = datetime.strptime(current, "%Y%m%d") + timedelta(days=1)
+            current = dt.strftime("%Y%m%d")
+        except: break
+    return rx_total, tx_total
 
-    # 获取推送时间和对齐方式
-    report_hour = config.get('dingtalk_report_hour', config.get('tg_report_hour', 23))
-    report_align = config.get('dingtalk_report_align', config.get('tg_report_align', 'natural'))
-
-    if period == 'total':
-        start_time = 0
-        label = "启用至今"
-    else:
-        if report_align == 'push_time':
-            # 按推送时间对齐
-            if period == 'daily':
-                start = now.replace(hour=report_hour, minute=0, second=0, microsecond=0)
-                if now < start:
-                    start = start - timedelta(days=1)
-                label = f"{start.strftime('%m月%d日 %H:%M')} - {now.strftime('%m月%d日 %H:%M')}"
-            elif period == 'weekly':
-                start = now.replace(hour=report_hour, minute=0, second=0, microsecond=0)
-                days_since_monday = now.weekday()
-                start = start - timedelta(days=days_since_monday)
-                if now < start:
-                    start = start - timedelta(weeks=1)
-                label = f"本周 ({start.strftime('%m/%d %H:%M')} - {now.strftime('%m/%d %H:%M')})"
-            elif period == 'monthly':
-                start = now.replace(day=1, hour=report_hour, minute=0, second=0, microsecond=0)
-                if now < start:
-                    if start.month == 1:
-                        start = start.replace(year=start.year - 1, month=12)
-                    else:
-                        start = start.replace(month=start.month - 1)
-                label = f"{now.strftime('%Y年%m月')} ({start.strftime('%m/%d %H:%M')} -)"
-        else:
-            # 自然日/周/月
-            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            if period == 'daily':
-                start = today_start
-                label = now.strftime('%m月%d日')
-            elif period == 'weekly':
-                start = today_start - timedelta(days=today_start.weekday())
-                label = f"本周 ({start.strftime('%m/%d')}-{now.strftime('%m/%d')})"
-            elif period == 'monthly':
-                start = today_start.replace(day=1)
-                label = now.strftime('%Y年%m月')
-
-        start_time = start.timestamp()
-
-    period_data = [h for h in history if h.get('timestamp', 0) >= start_time]
-
-    if not period_data or len(period_data) < 2:
-        return None
-
-    first = period_data[0]
-    last = period_data[-1]
-
-    rx_delta = max(0, last.get('rx_bytes', 0) - first.get('rx_bytes', 0))
-    tx_delta = max(0, last.get('tx_bytes', 0) - first.get('tx_bytes', 0))
-    download_delta = max(0, last.get('download_bytes', 0) - first.get('download_bytes', 0))
-
-    return {
-        'label': label,
-        'rx_mb': rx_delta / (1024 * 1024),
-        'tx_mb': tx_delta / (1024 * 1024),
-        'download_mb': download_delta / (1024 * 1024),
-    }
+def get_download_stats():
+    """从 daily_stats 获取填充下载量"""
+    try:
+        with open(os.path.join(CONFIG_DIR, "stats.json"), 'r') as f:
+            data = json.load(f)
+        daily = data.get("daily_stats", {})
+        return daily, data.get("total_downloaded", 0)
+    except:
+        return {}, 0
 
 def draw_bar(label, value, max_value, width=40):
     if max_value <= 0:
@@ -1275,37 +1231,74 @@ def draw_bar(label, value, max_value, width=40):
     else:
         filled = int((value / max_value) * width)
     bar = '█' * filled + '░' * (width - filled)
-    return f"  {label:12s} {bar}  {value:>8.1f} MB"
+    if value >= 1:
+        return f"  {label:12s} {bar}  {value:>8.1f} MB"
+    else:
+        return f"  {label:12s} {bar}  {value*1024:>7.0f} KB"
 
-history = load_history()
-summary = get_period_summary(history, "${period}")
+config = load_config()
+csv_dir = config.get("csv_log_dir", os.path.join(CONFIG_DIR, "logs"))
+now = datetime.now()
 
-if not summary:
+period = "${period}"
+if period == "daily":
+    start_date = now.strftime("%Y%m%d")
+    label = now.strftime('%m月%d日')
+elif period == "weekly":
+    start_date = (now - timedelta(days=now.weekday())).strftime("%Y%m%d")
+    label = f"本周 ({start_date[4:6]}/{start_date[6:]}-{now.strftime('%m/%d')})"
+elif period == "monthly":
+    start_date = now.strftime("%Y%m") + "01"
+    label = now.strftime('%Y年%m月')
+else:
+    start_date = "20200101"
+    label = "启用至今"
+
+# 从CSV获取RX/TX
+rx_bytes, tx_bytes = get_csv_traffic(csv_dir, start_date, now.strftime("%Y%m%d"))
+rx_mb = rx_bytes / (1024 * 1024)
+tx_mb = tx_bytes / (1024 * 1024)
+
+# 从daily_stats获取填充下载
+daily, total_downloaded = get_download_stats()
+if period == "daily":
+    download_bytes = daily.get(now.strftime("%Y-%m-%d"), 0)
+elif period == "weekly":
+    download_bytes = 0
+    for i in range(7):
+        day = (now - timedelta(days=i)).strftime("%Y-%m-%d")
+        download_bytes += daily.get(day, 0)
+        if (now - timedelta(days=i)).weekday() == 0 and i > 0:
+            break
+elif period == "monthly":
+    download_bytes = 0
+    prefix = now.strftime("%Y-%m")
+    for k, v in daily.items():
+        if k.startswith(prefix):
+            download_bytes += v
+else:
+    download_bytes = total_downloaded
+download_mb = download_bytes / (1024 * 1024)
+
+if rx_mb < 0.01 and tx_mb < 0.01 and download_mb < 0.01:
     print()
     print("  +----------------------------------------------------------------------+")
     print("  |  流量监控                                                            |")
     print("  +----------------------------------------------------------------------+")
-    print("  |                                                                      |")
-    print("  |    数据不足，请等待一段时间后再查看                                   |")
-    print("  |                                                                      |")
+    print("  |  数据不足，请等待一段时间后再查看                                    |")
     print("  +----------------------------------------------------------------------+")
 else:
-    max_val = max(summary['rx_mb'], summary['tx_mb'], summary['download_mb'], 1)
-    ratio_str = "1:{:.1f}".format(summary['rx_mb'] / summary['tx_mb']) if summary['tx_mb'] > 0 else "N/A"
-
+    max_val = max(rx_mb, tx_mb, download_mb, 0.01)
+    ratio_str = "1:{:.1f}".format(rx_mb / tx_mb) if tx_mb > 0 else "N/A"
     print()
     print(f"  +----------------------------------------------------------------------+")
-    print(f"  |  流量监控 - {summary['label']:<54s}  |")
+    print(f"  |  流量监控 - {label:<54s}  |")
     print(f"  +----------------------------------------------------------------------+")
-    print(f"  |                                                                      |")
-    print(f"  |{draw_bar('上行 (TX)', summary['tx_mb'], max_val)}   |")
-    print(f"  |                                                                      |")
-    print(f"  |{draw_bar('下行 (RX)', summary['rx_mb'], max_val)}   |")
-    print(f"  |                                                                      |")
-    print(f"  |{draw_bar('填充下载', summary['download_mb'], max_val)}   |")
-    print(f"  |                                                                      |")
+    print(f"  |{draw_bar('上行 (TX)', tx_mb, max_val)}   |")
+    print(f"  |{draw_bar('下行 (RX)', rx_mb, max_val)}   |")
+    print(f"  |{draw_bar('填充下载', download_mb, max_val)}   |")
     print(f"  +----------------------------------------------------------------------+")
-    print(f"  |  比例: {ratio_str:<10s}  目标: 1:{summary['rx_mb']/summary['tx_mb'] if summary['tx_mb'] > 0 else 0:.1f}                                  |")
+    print(f"  |  比例: {ratio_str:<10s}  目标: 1:{config.get('target_ratio', 3):.0f}                                  |")
     print(f"  +----------------------------------------------------------------------+")
 PYEOF
                 echo ""
