@@ -684,9 +684,11 @@ class AIAnalyzer:
         url = base_url.rstrip('/') + self.API_PATH
 
         prompt = (
-            "你是服务器流量分析助手。分析以下数据，用中文回答。\n"
-            "格式：先一句话判断(正常/异常)，再一句话建议。\n"
-            "严格控制在80字以内，不要复述数据，不要分段。\n\n"
+            "你是服务器流量分析助手。请根据以下数据回答三个问题：\n"
+            "1. 流量是否正常？（正常/异常）\n"
+            "2. 主要问题是什么？（一句话）\n"
+            "3. 建议怎么做？（一句话）\n"
+            "严格控制在100字以内，不要复述原始数据。\n\n"
             f"{data_summary}"
         )
 
@@ -1645,8 +1647,11 @@ class Scheduler:
                 with open(self.usage_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     if data.get('date') == self.current_date:
-                        self.daily_quota_used = data.get('used_bytes', 0)
-                        log_message("INFO", f"恢复配额: {self.daily_quota_used / (1024**3):.3f} GB")
+                        old_used = data.get('used_bytes', 0)
+                        if old_used > 0:
+                            self.daily_quota_used = 0
+                            self._save_usage_to_disk()
+                            log_message("INFO", f"重启校准: 配额归零 (之前: {old_used / (1024**3):.3f} GB)")
                     else:
                         self._save_usage_to_disk()
         except (json.JSONDecodeError, IOError):
@@ -2047,36 +2052,22 @@ class DingTalkNotifier(BaseNotifier):
             return False
 
     def _draw_traffic_chart(self, service: 'TrafficPaddingService') -> str:
-        """生成竖向流量柱状图（适配钉钉窄屏）"""
+        """生成横向流量柱状图"""
         summary = service.get_traffic_summary(self.report_freq, self.report_align, self.report_hour)
         if not summary or (summary['rx_mb'] == 0 and summary['tx_mb'] == 0 and summary['download_mb'] == 0):
             return ""
 
         max_val = max(summary['rx_mb'], summary['tx_mb'], summary['download_mb'], 1)
-        height = 8  # 柱子高度（行数）
 
-        # 计算每根柱子的填充行数
-        tx_h = int((summary['tx_mb'] / max_val) * height) if max_val > 0 else 0
-        rx_h = int((summary['rx_mb'] / max_val) * height) if max_val > 0 else 0
-        dl_h = int((summary['download_mb'] / max_val) * height) if max_val > 0 else 0
+        def draw_bar(label, value, width=20):
+            filled = int((value / max_val) * width) if max_val > 0 else 0
+            bar = '█' * filled + '░' * (width - filled)
+            return f"{label} {bar} {value:.1f}MB"
 
-        lines = []
-        lines.append(f"### 📊 流量柱状图 ({summary['label']})")
-        lines.append("")
-        lines.append("```")
-        # 从上到下画
-        for row in range(height, 0, -1):
-            tx_block = " ██ " if row <= tx_h else "    "
-            rx_block = " ██ " if row <= rx_h else "    "
-            dl_block = " ██ " if row <= dl_h else "    "
-            lines.append(f"  {tx_block} {rx_block} {dl_block}")
-        # 底部标签
-        lines.append(" ┌────┬────┬────┐")
-        lines.append("  TX   RX  填充")
-        lines.append(f" {summary['tx_mb']:.0f}  {summary['rx_mb']:.0f}  {summary['download_mb']:.0f} MB")
-        lines.append("```")
-
-        return "\n".join(lines)
+        return f"""### 📊 流量柱状图 ({summary['label']})
+{draw_bar('TX ', summary['tx_mb'])}
+{draw_bar('RX ', summary['rx_mb'])}
+{draw_bar('填充', summary['download_mb'])}"""
 
     def build_report(self, service: 'TrafficPaddingService') -> str:
         d = self._collect_report_data(service)
