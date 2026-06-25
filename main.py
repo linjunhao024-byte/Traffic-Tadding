@@ -684,9 +684,9 @@ class AIAnalyzer:
         url = base_url.rstrip('/') + self.API_PATH
 
         prompt = (
-            "你是一个服务器流量分析助手。请分析以下数据，用中文回答。\n"
-            "要求：1.判断流量是否正常 2.如有异常指出具体问题 3.给出一条可操作的建议\n"
-            "控制在120字以内，直接输出分析结果，不要重复数据本身。\n\n"
+            "你是服务器流量分析助手。分析以下数据，用中文回答。\n"
+            "格式：先一句话判断(正常/异常)，再一句话建议。\n"
+            "严格控制在80字以内，不要复述数据，不要分段。\n\n"
             f"{data_summary}"
         )
 
@@ -695,7 +695,7 @@ class AIAnalyzer:
             "temperature": 0.6,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
-            "max_tokens": 500,
+            "max_tokens": 200,
         }).encode('utf-8')
 
         headers = {
@@ -1800,9 +1800,10 @@ class BaseNotifier:
 
         # URL 健康
         healthy_count = 0
-        if service.url_pool.url_health:
-            healthy_count = sum(1 for h in service.url_pool.url_health.values()
-                               if h['success'] / max(1, h['success'] + h['fail']) > 0.8)
+        if service.url_pool.url_health and service.url_pool.urls:
+            pool_set = set(service.url_pool.urls)
+            healthy_count = sum(1 for url, h in service.url_pool.url_health.items()
+                               if url in pool_set and h['success'] / max(1, h['success'] + h['fail']) > 0.8)
 
         # QoS 状态
         qos_result = service._cached_qos_result or {}
