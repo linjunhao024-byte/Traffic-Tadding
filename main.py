@@ -68,11 +68,12 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
 ]
 
+# 不验证 SSL 证书 — 仅用于流量填充下载（目的就是浪费带宽，验证身份无意义）
 SSL_CONTEXT = ssl.create_default_context()
 SSL_CONTEXT.check_hostname = False
 SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
-# 安全 SSL 上下文（用于 QoS 探测、通知推送等需要验证身份的场景）
+# 安全 SSL 上下文 — 用于 QoS 探测、通知推送、URL 池 API 等需要验证身份的场景
 SSL_CONTEXT_SAFE = ssl.create_default_context()
 
 try:
@@ -1137,10 +1138,14 @@ class BaseNotifier:
         elif self.report_freq == "weekly":
             return now.weekday() == 0
         elif self.report_freq == "monthly":
-            reset_day = self.monthly_reset_day
+            reset_day = self.monthly_reset_day  # 月额度重置日（如每月 1 号）
             current_day = now.day
+            # 重置日前一天的中午后发送月报（提前通知）
+            # 例：reset_day=5 → 4 号 12:00 后发送
             if current_day == reset_day - 1 and current_hour >= 12:
                 return True
+            # 特殊处理：reset_day=1 时，前一天是上月最后一天
+            # 无法用 reset_day-1 表示，改为在本月 28~31 号的最后一天发送
             if reset_day == 1 and current_day >= 28 and current_hour >= 12:
                 _, last_day = calendar.monthrange(now.year, now.month)
                 if current_day == last_day:
