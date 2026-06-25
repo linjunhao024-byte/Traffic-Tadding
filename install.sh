@@ -1095,7 +1095,8 @@ with open(nf, 'w') as f: json.dump(n, f, indent=2, ensure_ascii=False)
 }
 
 get_auto_panel_status() {
-    if grep -q "tpm$" ~/.bashrc 2>/dev/null; then
+    local cmd="$(basename "$0")"
+    if grep -q "${cmd}$" ~/.bashrc 2>/dev/null; then
         echo -e "${GREEN}已开启${NC}"
     else
         echo -e "${DIM}已关闭${NC}"
@@ -1428,9 +1429,9 @@ do_update() {
     fi
 
     # 自动开启登录面板（兼容旧版安装）
-    if ! grep -q "tpm$" ~/.bashrc 2>/dev/null; then
+    if ! grep -q "${CMD_NAME}$" ~/.bashrc 2>/dev/null; then
         echo "# Traffic Padding 管理面板" >> ~/.bashrc
-        echo "tpm" >> ~/.bashrc
+        echo "${CMD_NAME}" >> ~/.bashrc
     fi
 
     echo ""
@@ -1703,12 +1704,13 @@ with open('${CONFIG_DIR}/config.json') as f:
                 ;;
             14)
                 echo ""
-                if grep -q "tpm$" ~/.bashrc 2>/dev/null; then
-                    sed -i '/tpm$/d' ~/.bashrc
+                local _cmd="$(basename "$0")"
+                if grep -q "${_cmd}$" ~/.bashrc 2>/dev/null; then
+                    sed -i "/${_cmd}$/d" ~/.bashrc
                     log_info "已关闭自动面板"
                 else
                     echo "# Traffic Padding 管理面板" >> ~/.bashrc
-                    echo "tpm" >> ~/.bashrc
+                    echo "${_cmd}" >> ~/.bashrc
                     log_info "已开启自动面板（下次登录生效）"
                 fi
                 wait_key
@@ -2278,9 +2280,9 @@ main() {
     start_service
 
     # 自动开启登录面板
-    if ! grep -q "tpm$" ~/.bashrc 2>/dev/null; then
+    if ! grep -q "${CMD_NAME}$" ~/.bashrc 2>/dev/null; then
         echo "# Traffic Padding 管理面板" >> ~/.bashrc
-        echo "tpm" >> ~/.bashrc
+        echo "${CMD_NAME}" >> ~/.bashrc
     fi
 
     show_success
