@@ -1123,9 +1123,20 @@ do_update() {
 
     echo ""
     echo -e "${GREEN}  ✅ 更新完成！${NC}"
-    echo -e "  建议重启服务: ${CYAN}systemctl restart traffic-padding${NC}"
     echo ""
-    wait_key
+    echo -ne "  按 Enter 重启服务并重新加载菜单..."
+    read -r
+
+    # 重启服务
+    systemctl restart "${SERVICE_NAME}" 2>/dev/null
+    if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
+        echo -e "  ${GREEN}[✓]${NC} 服务已重启"
+    else
+        echo -e "  ${YELLOW}[!]${NC} 服务重启失败（可稍后手动重启）"
+    fi
+
+    # 重新执行自身以加载新版管理脚本
+    exec "$0"
 }
 
 main() {
@@ -1512,6 +1523,9 @@ show_success() {
     echo -e "${GREEN}|${NC}  ${BOLD}配置文件:${NC}                                                                   ${GREEN}|${NC}"
     printf "${GREEN}|${NC}    ${CYAN}%-44s${NC} 热重载     ${GREEN}|${NC}\n" "${CONFIG_DIR}/config.json"
     echo -e "${GREEN}|${NC}                                                                              ${GREEN}|${NC}"
+    echo -e "${GREEN}|${NC}  ${BOLD}自动面板:${NC}  下次登录服务器将自动打开管理菜单                             ${GREEN}|${NC}"
+    echo -e "${GREEN}|${NC}            （菜单中选 [15] 可关闭）                                          ${GREEN}|${NC}"
+    echo -e "${GREEN}|${NC}                                                                              ${GREEN}|${NC}"
     echo -e "${GREEN}+===============================================================================+═══════════════════════════════════════════════════════════════════════════════╣${NC}"
     echo -e "${GREEN}|${NC}  如果这个项目对你有帮助，请给一个 ${YELLOW}⭐ Star${NC}！                                  ${GREEN}|${NC}"
     echo -e "${GREEN}|${NC}  ${CYAN}https://github.com/linjunhao024-byte/Traffic-Tadding${NC}                        ${GREEN}|${NC}"
@@ -1589,6 +1603,13 @@ main() {
     generate_config
     generate_service
     start_service
+
+    # 自动开启登录面板
+    if ! grep -q "tpm$" ~/.bashrc 2>/dev/null; then
+        echo "# Traffic Padding 管理面板" >> ~/.bashrc
+        echo "tpm" >> ~/.bashrc
+    fi
+
     show_success
 }
 
