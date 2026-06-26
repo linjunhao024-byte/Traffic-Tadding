@@ -76,7 +76,7 @@ show_logo() {
     echo '                                                                                          /____/    '
     echo -e "${NC}"
     echo -e "${BOLD}                         Traffic Padding Micro-Service${NC}"
-    echo -e "${BOLD}                             流量伪装微服务${NC}"
+    echo -e "${DIM}                                by LIN${NC}"
     echo ""
 }
 
@@ -525,7 +525,7 @@ CONFIG_DIR="/etc/traffic-padding"
 show_header() {
     clear
     echo -e "${CYAN}+===========================================================================+${NC}"
-    echo -e "${CYAN}|${NC}  ${BOLD}Traffic Padding Manager v1.1.0${NC}                                       ${CYAN}|${NC}"
+    echo -e "${CYAN}|${NC}  ${BOLD}${GREEN}LIN-Padding${NC}  ${DIM}v1.1.0${NC}                                                      ${CYAN}|${NC}"
     echo -e "${CYAN}+===========================================================================+${NC}"
     echo ""
 }
@@ -2301,6 +2301,7 @@ show_success() {
     echo -e "${GREEN}|${NC}            （菜单中选 [14] 可关闭）                                          ${GREEN}|${NC}"
     echo -e "${GREEN}|${NC}                                                                              ${GREEN}|${NC}"
     echo -e "${GREEN}+===============================================================================+═══════════════════════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${GREEN}|${NC}  ${BOLD}LIN-Padding${NC}  by LIN                                                          ${GREEN}|${NC}"
     echo -e "${GREEN}|${NC}  如果这个项目对你有帮助，请给一个 ${YELLOW}⭐ Star${NC}！                                  ${GREEN}|${NC}"
     echo -e "${GREEN}|${NC}  ${CYAN}https://github.com/linjunhao024-byte/Traffic-Tadding${NC}                        ${GREEN}|${NC}"
     echo -e "${GREEN}+===============================================================================+═══════════════════════════════════════════════════════════════════════════════╝${NC}"
