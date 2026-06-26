@@ -544,20 +544,54 @@ with open('${CONFIG_DIR}/config.json') as f:
 print(f\"网卡: {c.get('interface','?')}  比例: 1:{c.get('target_ratio','?')}  配额: {c.get('max_daily_extra_gb','?')}GB\")
 " 2>/dev/null || echo "配置读取失败")
 
-    local quota="今日: 无记录"
-    [[ -f "${CONFIG_DIR}/usage.json" ]] && quota=$(python3 -c "
-import json;from datetime import datetime as d
-with open('${CONFIG_DIR}/usage.json') as f:
-    p=json.load(f)
-b=p.get('used_bytes',0)
-t=d.now().strftime('%Y-%m-%d')
-print(f\"今日: {b/1073741824:.3f} GB\" if p.get('date')==t else '今日: 0.000 GB')
+    local info="今日: 无记录"
+    [[ -f "${CONFIG_DIR}/usage.json" ]] && info=$(python3 -c "
+import json, os
+from datetime import datetime as d
+
+config_dir = '${CONFIG_DIR}'
+today = d.now().strftime('%Y-%m-%d')
+
+# 配额
+quota_used = 0
+quota_limit = 10
+try:
+    with open(os.path.join(config_dir, 'usage.json')) as f:
+        p = json.load(f)
+        if p.get('date') == today:
+            quota_used = p.get('used_bytes', 0)
+    with open(os.path.join(config_dir, 'config.json')) as f:
+        c = json.load(f)
+        quota_limit = c.get('max_daily_extra_gb', 10)
+except: pass
+
+# 任务数
+task_count = 0
+try:
+    with open(os.path.join(config_dir, 'stats.json')) as f:
+        s = json.load(f)
+        task_count = s.get('daily_stats', {}).get(today, 0)
+except: pass
+
+# QoS
+qos = '未知'
+try:
+    with open(os.path.join(config_dir, 'qos_stats.json')) as f:
+        import json as j
+        h = j.load(f)
+        if h:
+            latest = h[-1]
+            level = latest.get('qos_level', 'unknown')
+            qos = {'good': '✓ 正常', 'warning': '⚠ 拥堵', 'bad': '✗ 严重拥堵', 'error': '✗ 探测失败'}.get(level, level)
+except: pass
+
+print(f\"今日: {quota_used/1073741824:.3f}/{quota_limit}GB  任务: {task_count}  QoS: {qos}\")
 " 2>/dev/null || echo "今日: 读取失败")
 
     echo -e "${CYAN}+---------------------------------------------------------------------------+${NC}"
-    echo -e "${CYAN}|${NC}  状态: ${status}   自启: ${GREEN}${boot}${NC}                                          ${CYAN}|${NC}"
+    echo -e "${CYAN}|${NC}  状态: ${status}   自启: ${boot}                                          ${CYAN}|${NC}"
     echo -e "${CYAN}|${NC}  ${config}                                                  ${CYAN}|${NC}"
-    echo -e "${CYAN}|${NC}  ${quota}                                                            ${CYAN}|${NC}"
+    echo -e "${CYAN}|${NC}  ${info}                                                     ${CYAN}|${NC}"
     echo -e "${CYAN}+---------------------------------------------------------------------------+${NC}"
 }
 
@@ -1470,8 +1504,12 @@ do_update() {
         echo "${CMD_NAME}" >> ~/.bashrc
     fi
 
+    # 获取新版本号
+    local new_ver=$(grep -oP '__version__\s*=\s*"\K[^"]+' "${INSTALL_DIR}/main.py" 2>/dev/null || echo "unknown")
+
     echo ""
     echo -e "${GREEN}  ✅ 更新完成！${NC}"
+    echo -e "  版本: ${current_ver} → ${GREEN}${new_ver}${NC}"
     echo ""
     echo -ne "  按 Enter 重启服务并重新加载菜单..."
     read -r
@@ -1611,7 +1649,8 @@ main() {
                 if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
                     systemctl kill -s SIGUSR1 "${SERVICE_NAME}"
                     echo ""
-                    log_info "已发送推送请求，请检查钉钉/TG"
+                    log_info "已发送推送请求"
+                    echo -e "  ${DIM}报告将在几秒内推送到钉钉/TG，请留意通知${NC}"
                 else
                     echo ""
                     echo -e "  ${RED}[✗]${NC} 服务未运行"

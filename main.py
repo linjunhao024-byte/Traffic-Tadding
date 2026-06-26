@@ -2320,6 +2320,7 @@ class TrafficPaddingService:
         self._cached_traffic_stats = None
         self.start_time = time.time()
         self.manual_report_requested = False
+        self._quota_exhausted_notified = False  # 配额用完通知标记
         self.server_name = self.config.get('server_name', 'Realm中转服务器')
 
         # 通知管理（8种通知类型，默认全部启用）
@@ -2665,7 +2666,17 @@ class TrafficPaddingService:
 
         should_run, target_bytes = self.scheduler.should_execute_task(traffic_stats)
 
+        # 配额用完通知（只通知一次）
+        if not should_run and self.scheduler.daily_quota_used >= self.scheduler.daily_quota_limit:
+            if not self._quota_exhausted_notified:
+                self._quota_exhausted_notified = True
+                quota_gb = self.scheduler.daily_quota_limit / (1024**3)
+                msg = f"📊 今日配额已用完\n\n配额: {quota_gb:.1f} GB\n填充下载已暂停，明天自动恢复。"
+                self._send_notification("📊 配额用完", msg, "bandwidth_alert")
+                log_message("INFO", f"今日配额 {quota_gb:.1f} GB 已用完，暂停填充")
+
         if should_run:
+            self._quota_exhausted_notified = False  # 有新任务时重置标记
             url = self.url_pool.get_random_url()
             if url:
                 result = self.downloader.execute_task(url, target_bytes)
