@@ -1546,10 +1546,10 @@ main() {
         echo -e "${CYAN}|${NC}  ${RED}[12]${NC} 卸载         ${GREEN}[13]${NC} 一键更新     ${YELLOW}[14]${NC} 自动面板: $(get_auto_panel_status)       ${CYAN}|${NC}"
         echo -e "${CYAN}|${NC}  ${GREEN}[15]${NC} 流量与带宽   ${GREEN}[16]${NC} 告警设置     ${GREEN}[17]${NC} AI分析: $(get_ai_status)              ${CYAN}|${NC}"
         echo -e "${CYAN}+===========================================================================+${NC}"
-        echo -e "${CYAN}|${NC}  ${CYAN}[0]${NC} 退出                                                                    ${CYAN}|${NC}"
+        echo -e "${CYAN}|${NC}  ${CYAN}[0]${NC} 退出         ${DIM}[A]${NC} 关于                                                    ${CYAN}|${NC}"
         echo -e "${CYAN}+===========================================================================+${NC}"
         echo ""
-        echo -ne "  请选择 [0-17]: "
+        echo -ne "  请选择 [0-17, A]: "
         read choice
 
         case "$choice" in
@@ -2105,6 +2105,30 @@ else:
                     esac
                     [[ "$ai_choice" != "0" ]] && wait_key
                 done
+                ;;
+            A|a)
+                echo ""
+                echo -e "${CYAN}+===========================================================================+${NC}"
+                printf "${CYAN}|${NC}  ${BOLD}%-69s${NC}${CYAN}|${NC}\n" "关于"
+                echo -e "${CYAN}+---------------------------------------------------------------------------+${NC}"
+                printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
+                printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  ┃                                         ┃"
+                printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  ┃  ████         ███████    ████           ┃"
+                printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  ┃  ████           ████      ████         ██████ ┃"
+                printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  ┃  ████           ████      ████  ███    ████   ┃"
+                printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  ┃  ████           ████      ████   ███  ████    ┃"
+                printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  ┃  ████           ████      ████    ███ ████    ┃"
+                printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  ┃  █████████████  ████████  ████     ████████   ┃"
+                printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  ┃                                         ┃"
+                printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
+                echo -e "${CYAN}|${NC}                                                                           ${CYAN}|${NC}"
+                printf "${CYAN}|${NC}  ${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  Traffic Padding Micro-Service v${__version__:-1.1.0}"
+                printf "${CYAN}|${NC}  ${DIM}%-69s${NC}${CYAN}|${NC}\n" "  流量伪装微服务"
+                printf "${CYAN}|${NC}  ${DIM}%-69s${NC}${CYAN}|${NC}\n" "  by LIN"
+                echo -e "${CYAN}|${NC}                                                                           ${CYAN}|${NC}"
+                printf "${CYAN}|${NC}  ${DIM}%-69s${NC}${CYAN}|${NC}\n" "  https://github.com/linjunhao024-byte/Traffic-Tadding"
+                echo -e "${CYAN}+===========================================================================+${NC}"
+                wait_key
                 ;;
             0)
                 clear
