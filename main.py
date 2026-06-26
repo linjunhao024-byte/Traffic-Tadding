@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# LIN-Padding - Traffic Padding Micro-Service
+# Traffic Padding Micro-Service v1.0.0
 # 流量伪装微服务：全天候随机微量碎片填充，使上下行流量比例自然化
+
+__version__ = "1.0.0"
 
 import calendar
 import hashlib
