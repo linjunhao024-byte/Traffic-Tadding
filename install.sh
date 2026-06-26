@@ -1341,13 +1341,16 @@ else:
 }
 
 do_update() {
+    # 获取当前版本
+    local current_ver=$(grep -oP '__version__\s*=\s*"\K[^"]+' "${INSTALL_DIR}/main.py" 2>/dev/null || echo "unknown")
+
     echo ""
     echo -e "${CYAN}+--------------------------------------------------------------+${NC}"
     echo -e "${CYAN}|${NC}  ${BOLD}一键更新${NC}                                                    ${CYAN}|${NC}"
     echo -e "${CYAN}+--------------------------------------------------------------+${NC}"
-    echo -e "${CYAN}|${NC}  正在从 GitHub 下载最新版本...                                ${CYAN}|${NC}"
+    printf "${CYAN}|${NC}    当前版本: ${GREEN}%-48s${NC}${CYAN}|${NC}\n" "${current_ver}"
+    echo -e "${CYAN}|${NC}    检查 GitHub...                                              ${CYAN}|${NC}"
     echo -e "${CYAN}+--------------------------------------------------------------+${NC}"
-    echo ""
 
     # 检测是否能访问 GitHub（加时间戳防缓存）
     local mirror_url="https://ghfast.top/"
@@ -1356,6 +1359,34 @@ do_update() {
         mirror_url=""
         cache_bust=""
     fi
+
+    # 获取远程版本
+    local remote_ver=$(curl -sL "${mirror_url}https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/main.py${cache_bust}" 2>/dev/null | grep -oP '__version__\s*=\s*"\K[^"]+' | head -1)
+    if [[ -z "$remote_ver" ]]; then
+        remote_ver=$(curl -sL "https://raw.githubusercontent.com/linjunhao024-byte/Traffic-Tadding/main/main.py" 2>/dev/null | grep -oP '__version__\s*=\s*"\K[^"]+' | head -1)
+    fi
+
+    echo -e "${CYAN}|${NC}    GitHub 版本: ${GREEN}${remote_ver:-未知}${NC}                                      ${CYAN}|${NC}"
+
+    # 版本比较
+    if [[ -n "$remote_ver" && "$current_ver" == "$remote_ver" ]]; then
+        echo -e "${CYAN}|${NC}    ${GREEN}✓ 已是最新版本${NC}                                              ${CYAN}|${NC}"
+        echo -e "${CYAN}+--------------------------------------------------------------+${NC}"
+        wait_key
+        return 0
+    fi
+
+    echo -e "${CYAN}|${NC}    ${YELLOW}发现新版本: ${remote_ver}${NC}                                          ${CYAN}|${NC}"
+    echo -e "${CYAN}+--------------------------------------------------------------+${NC}"
+    echo ""
+    echo -ne "  是否更新？(Y/n): "
+    read confirm
+    if [[ "${confirm,,}" == "n" ]]; then
+        echo "  已取消"
+        wait_key
+        return 0
+    fi
+    echo ""
 
     # 下载 main.py（用版本标记验证是否最新）
     echo -ne "  下载 main.py..."
