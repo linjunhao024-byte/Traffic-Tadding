@@ -198,6 +198,8 @@ class BandwidthMonitor:
         self._alert_state = "normal"  # normal / alert
         self._alert_last_ts = 0
         self._alert_start_ts = 0  # 告警开始时间
+        self._alert_peak_mbps = 0  # 告警期间峰值
+        self._alert_history: List[Dict] = []  # 告警历史 [{start, end, duration_sec, peak_mbps}]
 
         # 流量累计（字节，用于报告）
         self._today_rx_bytes = 0
@@ -313,6 +315,7 @@ class BandwidthMonitor:
                 self._today_total_sum = 0.0
                 self._today_samples = 0
                 self._today_alert_count = 0
+                self._alert_history = []
                 self._today_rx_bytes = 0
                 self._today_tx_bytes = 0
 
@@ -399,6 +402,7 @@ class BandwidthMonitor:
                 'total_avg': self._today_total_sum / samples,
                 'samples': self._today_samples,
                 'alert_count': self._today_alert_count,
+                'alert_history': list(self._alert_history),
                 'rx_bytes': self._today_rx_bytes,
                 'tx_bytes': self._today_tx_bytes,
             }
@@ -420,6 +424,9 @@ class BandwidthMonitor:
             self._alert_last_ts = now
             if self._alert_start_ts == 0:
                 self._alert_start_ts = now
+                self._alert_peak_mbps = total_speed
+            elif total_speed > self._alert_peak_mbps:
+                self._alert_peak_mbps = total_speed
             with self._lock:
                 self._today_alert_count += 1
 
@@ -440,8 +447,16 @@ class BandwidthMonitor:
 
         elif self._alert_state == "alert" and recovery:
             duration = int(now - self._alert_start_ts) if self._alert_start_ts > 0 else int(now - self._alert_last_ts)
+            # 记录告警事件
+            self._alert_history.append({
+                'start': datetime.fromtimestamp(self._alert_start_ts).strftime('%H:%M') if self._alert_start_ts else '?',
+                'end': datetime.now().strftime('%H:%M'),
+                'duration_sec': duration,
+                'peak_mbps': getattr(self, '_alert_peak_mbps', total_speed),
+            })
             self._alert_state = "normal"
             self._alert_start_ts = 0
+            self._alert_peak_mbps = 0
             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             log_message("INFO", f"带宽恢复: {total_speed:.1f}Mbps, 告警持续 {duration // 60} 分钟")
 
@@ -1971,6 +1986,14 @@ class TelegramNotifier(BaseNotifier):
                     return f"{b / (1024**2):.1f} MB"
                 else:
                     return f"{b / 1024:.0f} KB"
+            # 告警详情
+            alert_detail = ""
+            if bt.get('alert_history'):
+                for ah in bt['alert_history']:
+                    dur_min = ah['duration_sec'] // 60
+                    dur_sec = ah['duration_sec'] % 60
+                    alert_detail += f"\n│   {ah['start']}-{ah['end']} 持续{dur_min}分{dur_sec}秒 峰值{ah['peak_mbps']:.0f}Mbps"
+
             bw_str = f"""
 📊 带宽监控
 ├ 入站峰值: {bt['rx_peak']:.1f} Mbps ({bt['rx_peak_time']})
@@ -1978,7 +2001,7 @@ class TelegramNotifier(BaseNotifier):
 ├ 入站平均: {bt['rx_avg']:.1f} Mbps
 ├ 出站平均: {bt['tx_avg']:.1f} Mbps
 ├ 总流量: RX {fmt_bytes(bt['rx_bytes'])} / TX {fmt_bytes(bt['tx_bytes'])}
-└ 告警: {bt['alert_count']} 次"""
+└ 告警: {bt['alert_count']} 次{alert_detail}"""
 
         # AI 分析段
         ai_str = ""
@@ -2154,13 +2177,21 @@ class DingTalkNotifier(BaseNotifier):
                     return f"{b / (1024**2):.1f} MB"
                 else:
                     return f"{b / 1024:.0f} KB"
+            # 告警详情
+            alert_detail = ""
+            if bt.get('alert_history'):
+                for ah in bt['alert_history']:
+                    dur_min = ah['duration_sec'] // 60
+                    dur_sec = ah['duration_sec'] % 60
+                    alert_detail += f"\n-   {ah['start']}-{ah['end']} 持续{dur_min}分{dur_sec}秒 峰值{ah['peak_mbps']:.0f}Mbps"
+
             bw_str = f"""### 📊 带宽监控
 - 入站峰值: {bt['rx_peak']:.1f} Mbps ({bt['rx_peak_time']})
 - 出站峰值: {bt['tx_peak']:.1f} Mbps ({bt['tx_peak_time']})
 - 入站平均: {bt['rx_avg']:.1f} Mbps
 - 出站平均: {bt['tx_avg']:.1f} Mbps
 - 总流量: RX {fmt_bytes(bt['rx_bytes'])} / TX {fmt_bytes(bt['tx_bytes'])}
-- 告警: {bt['alert_count']} 次"""
+- 告警: {bt['alert_count']} 次{alert_detail}"""
 
         # AI 分析段
         ai_str = ""
