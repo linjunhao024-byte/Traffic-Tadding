@@ -2112,7 +2112,7 @@ else:
                 echo -e "${CYAN}+---------------------------------------------------------------------------+${NC}"
                 printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  +---------------------------------------+"
                 printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  |                                       |"
-                printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  |  ▀▀▀▀         ▀▀▀▀▀▀▀    ▀▀▀▀           ▀▀▀▀ |"
+                printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  |  ████         ███████    ████           ████   |"
                 printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  |  ████           ████      ████         ██████ |"
                 printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  |  ████           ████      ████  ███    ████   |"
                 printf "${CYAN}|${NC}  ${GREEN}${BOLD}%-69s${NC}${CYAN}|${NC}\n" "  |  ████           ████      ████   ███  ████    |"
