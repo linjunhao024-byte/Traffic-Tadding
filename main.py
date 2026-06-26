@@ -247,8 +247,9 @@ class BandwidthMonitor:
         time_delta = max(0.1, now - self.prev_ts)
 
         # 计算 Mbps（处理计数器溢出）
-        rx_delta = calculate_counter_delta(self.prev_rx, rx, COUNTER_MAX_64BIT)
-        tx_delta = calculate_counter_delta(self.prev_tx, tx, COUNTER_MAX_64BIT)
+        counter_max = COUNTER_MAX_64BIT if detect_system_counter_bits() == 64 else COUNTER_MAX_32BIT
+        rx_delta = calculate_counter_delta(self.prev_rx, rx, counter_max)
+        tx_delta = calculate_counter_delta(self.prev_tx, tx, counter_max)
         rx_speed = max(0.0, rx_delta * 8 / 1_000_000 / time_delta)
         tx_speed = max(0.0, tx_delta * 8 / 1_000_000 / time_delta)
         total_speed = rx_speed + tx_speed
@@ -259,6 +260,7 @@ class BandwidthMonitor:
 
         # 所有共享状态修改都在锁内
         csv_to_write = None
+        csv_data = None
         with self._lock:
             self._latest_rx_speed = rx_speed
             self._latest_tx_speed = tx_speed
@@ -314,24 +316,40 @@ class BandwidthMonitor:
                 self._today_rx_bytes = 0
                 self._today_tx_bytes = 0
 
-            # 分钟切换 → 标记写CSV
+            # 分钟切换 → 快照数据并在锁内重置
             now_minute = datetime.now().strftime("%Y%m%d%H%M")
             if now_minute != self.current_minute and self.sample_count > 0:
                 if csv_to_write is None:
                     csv_to_write = self._today_date
                 self.current_minute = now_minute
+                # 快照并重置分钟累积（在锁内完成）
+                csv_snapshot = {
+                    'rx_peak': self.min_rx_peak,
+                    'tx_peak': self.min_tx_peak,
+                    'rx_sum': self.min_rx_sum,
+                    'tx_sum': self.min_tx_sum,
+                    'count': self.sample_count,
+                }
+                self.min_rx_peak = 0.0
+                self.min_tx_peak = 0.0
+                self.min_rx_sum = 0.0
+                self.min_tx_sum = 0.0
+                self.sample_count = 0
+                csv_data = csv_snapshot
 
         # 锁外执行CSV写入（IO操作）
-        if csv_to_write:
-            self._write_csv(csv_to_write)
+        if csv_to_write and csv_data:
+            self._write_csv(csv_to_write, csv_data)
 
         # 告警检查
         self._check_alert(rx_speed, tx_speed, total_speed)
 
-    def _write_csv(self, date_str: str = None):
-        """写入一分钟的CSV记录"""
+    def _write_csv(self, date_str: str = None, snapshot: Dict = None):
+        """写入一分钟的CSV记录（使用锁内快照的数据）"""
         try:
-            if self.sample_count == 0:
+            data = snapshot or {}
+            count = data.get('count', 0)
+            if count == 0:
                 return
 
             csv_dir = self.config.get('csv_log_dir', '/etc/traffic-padding/logs')
@@ -339,27 +357,19 @@ class BandwidthMonitor:
             date_tag = (date_str or self._today_date).replace('-', '')
             csv_file = os.path.join(csv_dir, f"bandwidth_{date_tag}.csv")
 
-            # 写表头
             if not os.path.exists(csv_file):
                 with open(csv_file, 'w') as f:
                     f.write("timestamp,rx_peak_mbps,tx_peak_mbps,total_peak_mbps,rx_avg_mbps,tx_avg_mbps,total_avg_mbps,samples\n")
 
-            rx_avg = self.min_rx_sum / self.sample_count
-            tx_avg = self.min_tx_sum / self.sample_count
-            total_peak = self.min_rx_peak + self.min_tx_peak
+            rx_avg = data['rx_sum'] / count
+            tx_avg = data['tx_sum'] / count
+            total_peak = data['rx_peak'] + data['tx_peak']
             total_avg = rx_avg + tx_avg
             ts = (datetime.now() - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M")
 
             with open(csv_file, 'a') as f:
-                f.write(f"{ts},{self.min_rx_peak:.4f},{self.min_tx_peak:.4f},{total_peak:.4f},"
-                        f"{rx_avg:.4f},{tx_avg:.4f},{total_avg:.4f},{self.sample_count}\n")
-
-            # 重置分钟累积
-            self.min_rx_peak = 0.0
-            self.min_tx_peak = 0.0
-            self.min_rx_sum = 0.0
-            self.min_tx_sum = 0.0
-            self.sample_count = 0
+                f.write(f"{ts},{data['rx_peak']:.4f},{data['tx_peak']:.4f},{total_peak:.4f},"
+                        f"{rx_avg:.4f},{tx_avg:.4f},{total_avg:.4f},{count}\n")
         except (IOError, OSError) as e:
             log_message("ERROR", f"写入 CSV 失败: {e}")
 
@@ -570,6 +580,7 @@ class AIAnalyzer:
         self._last_analysis = ""  # 最近一次分析结果
         self._last_analysis_time = 0
         self._analysis_file = "/etc/traffic-padding/ai_analysis.json"
+        self._analyzing = False
         self._load_cached()
 
     def _load_cached(self):
@@ -747,25 +758,32 @@ class AIAnalyzer:
             return self._last_analysis_time
 
     def trigger_now(self):
-        """手动触发一次分析（独立线程，跳过启动延迟）"""
+        """手动触发一次分析（防止并发）"""
+        if self._analyzing:
+            log_message("INFO", "AI 分析正在进行，跳过重复触发")
+            return
+        self._analyzing = True
         def _run():
-            if not self.config.get('ai_enabled', True):
-                log_message("WARN", "AI 分析已关闭，请先开启")
-                return
-            data = self._prepare_data()
-            if not data:
-                log_message("WARN", "无数据可分析")
-                return
-            log_message("INFO", "手动触发 AI 分析...")
-            result = self._call_api(data)
-            if result:
-                with self._lock:
-                    self._last_analysis = result
-                    self._last_analysis_time = time.time()
-                self._save_cached()
-                log_message("INFO", f"手动 AI 分析完成 ({len(result)} 字)")
-            else:
-                log_message("WARN", "手动 AI 分析失败")
+            try:
+                if not self.config.get('ai_enabled', True):
+                    log_message("WARN", "AI 分析已关闭，请先开启")
+                    return
+                data = self._prepare_data()
+                if not data:
+                    log_message("WARN", "无数据可分析")
+                    return
+                log_message("INFO", "手动触发 AI 分析...")
+                result = self._call_api(data)
+                if result:
+                    with self._lock:
+                        self._last_analysis = result
+                        self._last_analysis_time = time.time()
+                    self._save_cached()
+                    log_message("INFO", f"手动 AI 分析完成 ({len(result)} 字)")
+                else:
+                    log_message("WARN", "手动 AI 分析失败")
+            finally:
+                self._analyzing = False
         threading.Thread(target=_run, daemon=True, name="AI-Manual").start()
 
 
@@ -831,9 +849,8 @@ class Config:
 # ============================================================================
 
 class TrafficMonitor:
-    def __init__(self, interface: str, bandwidth_monitor: 'BandwidthMonitor' = None):
+    def __init__(self, interface: str, bandwidth_monitor=None):
         self.interface = interface
-        self.bw_monitor = bandwidth_monitor  # 可选：从带宽监控读缓存
         self.prev_rx_bytes = 0
         self.prev_tx_bytes = 0
         self.prev_time = 0
@@ -1137,18 +1154,6 @@ class QoSProbe:
             return "↓ 改善中"
         elif recent_avg > older_avg * 1.1:
             return "↑ 恶化中"
-        older = [h for h in self.history if h.get('timestamp', 0) <= hour_ago]
-
-        if not recent or not older:
-            return "数据不足"
-
-        recent_avg = sum(h.get('latency_avg', 0) for h in recent) / len(recent)
-        older_avg = sum(h.get('latency_avg', 0) for h in older[-10:]) / min(len(older), 10)
-
-        if recent_avg < older_avg * 0.9:
-            return "↓ 改善中"
-        elif recent_avg > older_avg * 1.1:
-            return "↑ 恶化中"
         else:
             return "→ 稳定"
 
@@ -1199,7 +1204,8 @@ class URLPool:
             self.url_health[url] = {"success": 0, "fail": 0, "last_fail": 0, "last_success": 0}
         self.url_health[url]["fail"] += 1
         self.url_health[url]["last_fail"] = time.time()
-        self._save_health_data()
+        if self.url_health[url]["fail"] % 5 == 0:
+            self._save_health_data()
 
     def _get_url_score(self, url: str) -> float:
         """健康分数 0.0-1.0，1 小时内失败过的减半"""
@@ -2713,7 +2719,7 @@ class TrafficPaddingService:
             if self.qos_probe.enabled:
                 log_message("INFO", "执行 QoS 探测...")
                 self._cached_qos_result = self.qos_probe.probe_all()
-                status = self._cached_qos_result.get('status', 'unknown')
+                status = self._cached_qos_result.get('qos_level', 'unknown')
                 latency = self._cached_qos_result.get('latency_avg', 0)
                 loss = self._cached_qos_result.get('loss', 0)
                 log_message("INFO", f"QoS 状态: {status} | 延迟: {latency:.0f}ms | 丢包: {loss:.0f}%")
