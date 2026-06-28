@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.1.0-blue?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-v1.2.1-blue?style=flat-square" alt="Version">
   <a href="https://github.com/linjunhao024-byte/Traffic-Tadding/stargazers"><img src="https://img.shields.io/github/stars/linjunhao024-byte/Traffic-Tadding?style=flat-square&color=yellow&logo=github&cacheSeconds=60" alt="Stars"></a>
   <a href="https://github.com/linjunhao024-byte/Traffic-Tadding/network/members"><img src="https://img.shields.io/github/forks/linjunhao024-byte/Traffic-Tadding?style=flat-square&color=blue&logo=github&cacheSeconds=60" alt="Forks"></a>
   <a href="https://github.com/linjunhao024-byte/Traffic-Tadding/issues"><img src="https://img.shields.io/github/issues/linjunhao024-byte/Traffic-Tadding?style=flat-square&color=red&logo=github&cacheSeconds=60" alt="Issues"></a>
@@ -83,7 +83,7 @@ cd /tmp && rm -f install.sh main.py && wget -q https://ghfast.top/https://raw.gi
 
 ## 📋 安装过程
 
-安装脚本会引导你完成 5 项配置：
+安装脚本会引导你完成 6 项配置：
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
@@ -133,9 +133,9 @@ cd /tmp && rm -f install.sh main.py && wget -q https://ghfast.top/https://raw.gi
 ├─────────────────────────────────────────────────────────────────┤
 │  [10] 开机自启      [12] 卸载        [14] 自动面板               │
 │  [11] 网卡与下载    [13] 一键更新    [15] 流量与带宽              │
-│  [16] 告警设置      [17] AI 分析                                  │
+│  [16] 告警设置      [17] AI 分析     [18] 清空记录               │
 ├─────────────────────────────────────────────────────────────────┤
-│  [0] 退出                                                        │
+│  [0] 退出         [A] 关于                                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -339,6 +339,10 @@ Traffic-Tadding/                   /opt/traffic-padding/
 | AI 分析 | 每小时自动调用 DeepSeek 分析流量，结果注入报告 |
 | 通知管理 | 8 种通知独立开关，tpm 菜单可视化管理 |
 | 周报清日志 | 周报发送成功后自动清理 7 天 CSV 日志 |
+| 版本检查 | 一键更新自动对比本地和 GitHub 版本 |
+| 清空记录 | 分类清空统计/日志/历史，带确认提示 |
+| 告警记录 | 记录每次告警的开始/结束/持续/峰值 |
+| TCP QoS | TCP ping 探测，国内外分离统计 |
 
 ---
 
