@@ -524,8 +524,9 @@ CONFIG_DIR="/etc/traffic-padding"
 
 show_header() {
     clear
+    local ver=$(grep -oP '__version__\s*=\s*"\K[^"]+' "${INSTALL_DIR}/main.py" 2>/dev/null || echo "unknown")
     echo -e "${CYAN}+===========================================================================+${NC}"
-    echo -e "${CYAN}|${NC}  ${BOLD}${GREEN}LIN-Padding${NC}  ${DIM}v1.1.0${NC}                                                      ${CYAN}|${NC}"
+    echo -e "${CYAN}|${NC}  ${BOLD}${GREEN}LIN-Padding${NC}  ${DIM}v${ver}${NC}                                                         ${CYAN}|${NC}"
     echo -e "${CYAN}+===========================================================================+${NC}"
     echo ""
 }
@@ -2215,6 +2216,19 @@ else:
                         echo -e "  ${RED}无效选项${NC}"
                         ;;
                 esac
+
+                # 清空后提示重启
+                if [[ "$clear_choice" != "0" && "$clear_choice" != "" ]]; then
+                    echo ""
+                    echo -ne "  ${YELLOW}清空后需要重启服务才能生效，现在重启？(y/N):${NC} "
+                    read restart_confirm
+                    if [[ "${restart_confirm,,}" == "y" ]]; then
+                        systemctl restart "${SERVICE_NAME}" 2>/dev/null
+                        log_info "服务已重启"
+                    else
+                        echo -e "  ${DIM}请稍后手动重启: sudo systemctl restart ${SERVICE_NAME}${NC}"
+                    fi
+                fi
                 wait_key
                 ;;
             0)
