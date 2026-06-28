@@ -2105,8 +2105,8 @@ class DingTalkNotifier(BaseNotifier):
         if service.bandwidth_monitor:
             bw_today = service.bandwidth_monitor.get_today_stats()
 
-        stats = service.downloader.get_stats()
-        download_mb = stats['total_downloaded_mb']
+        # 用持久化的累计值，不用内存计数器（重启不丢失）
+        download_mb = service.total_downloaded_all_time / (1024 * 1024)
 
         rx_mb = bw_today['rx_bytes'] / (1024 * 1024) if bw_today else 0
         tx_mb = bw_today['tx_bytes'] / (1024 * 1024) if bw_today else 0
