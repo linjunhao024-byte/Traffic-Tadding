@@ -1804,13 +1804,13 @@ class BaseNotifier:
         # 月流量字符串
         monthly_str = ""
         if self.monthly_quota_gb != 0:
-            period = service.get_period_stats('monthly')
-            monthly_used_gb = period['gb']
+            monthly_period = service.get_period_stats('monthly')
+            monthly_used_gb = monthly_period['gb']
             if self.monthly_quota_gb == -1:
-                monthly_str = f"\n- 月总额度: 无限\n- 已消耗: {monthly_used_gb:.3f} GB"
+                monthly_str = f"\n- 月额度: 无限\n- 本月已记录填充: {monthly_used_gb:.3f} GB（非月总流量）"
             elif self.monthly_quota_gb > 0:
                 monthly_pct = (monthly_used_gb / self.monthly_quota_gb) * 100
-                monthly_str = f"\n- 月总额度: {self.monthly_quota_gb:.1f} GB\n- 已消耗: {monthly_used_gb:.3f} GB\n- 占比: {monthly_pct:.2f}%"
+                monthly_str = f"\n- 月额度: {self.monthly_quota_gb:.1f} GB\n- 本月已记录填充: {monthly_used_gb:.3f} GB（非月总流量）\n- 填充占额度: {monthly_pct:.2f}%"
 
         # 下载速度
         avg_speed = service.downloader.get_avg_speed()
@@ -2106,7 +2106,7 @@ class DingTalkNotifier(BaseNotifier):
             bw_today = service.bandwidth_monitor.get_today_stats()
 
         # 用持久化的累计值，不用内存计数器（重启不丢失）
-        download_mb = service.total_downloaded_all_time / (1024 * 1024)
+        download_mb = service.get_period_stats('daily')['bytes'] / (1024 * 1024)
 
         rx_mb = bw_today['rx_bytes'] / (1024 * 1024) if bw_today else 0
         tx_mb = bw_today['tx_bytes'] / (1024 * 1024) if bw_today else 0
@@ -2126,7 +2126,7 @@ class DingTalkNotifier(BaseNotifier):
             return f"  {label:8s} {bar} {fmt_val(value):>9s}"
 
         lines = [
-            "### 📊 流量柱状图",
+            "### 📊 流量柱状图（网卡为服务运行期间；填充为今日已记录）",
             "",
             "```javascript",
             "┌─────────────────────────────────────────────────────┐",
@@ -2202,11 +2202,30 @@ class DingTalkNotifier(BaseNotifier):
         if d['ai_analysis']:
             ai_str = f"\n\n### 🤖 AI 分析\n\n{d['ai_analysis']}"
 
+        today_fill = service.get_period_stats('daily')['gb']
+        monthly_fill = service.get_period_stats('monthly')['gb']
+        remaining = max(0, d['daily_quota_gb'] - d['quota_used'] / (1024 ** 3))
+        if d['bw_today']:
+            summary_traffic = (f"接收 {d['bw_today']['rx_bytes'] / (1024 ** 3):.3f} GB / "
+                               f"发送 {d['bw_today']['tx_bytes'] / (1024 ** 3):.3f} GB"
+                               "（今日服务运行期间的网卡采样，含填充）")
+        else:
+            summary_traffic = "不可用（带宽监控未启用）"
+        monthly_limit = service.config.get('monthly_quota_gb', 0)
+        monthly_limit_text = (f"{monthly_limit:.1f} GB" if monthly_limit > 0 else
+                              "无限" if monthly_limit == -1 else "未设置")
+
         # 构建报告（- 和内容同行，钉钉渲染为 •）
         report = f"""## 📋 Traffic Padding {d['freq_label']}
 **🖥️ {d['server_name']}**
 🕐 **{d['now'].strftime("%Y-%m-%d %H:%M")}**
-{bw_str}
+
+### 📌 今日概览
+- 网卡流量: {summary_traffic}
+- 今日填充: {today_fill:.3f} GB（脚本已记录的下载量）
+- 剩余填充配额: {remaining:.3f} / {d['daily_quota_gb']:.1f} GB（按当前配额计数）
+- 月额度: {monthly_limit_text}；本月填充 {monthly_fill:.3f} GB（非运营商月总流量）
+- 代理线路状态: 未接入线路监控，无法判断
 
 ### 📦 流量填充
 - {period_str}
@@ -2229,17 +2248,7 @@ class DingTalkNotifier(BaseNotifier):
 - 成功: {d['stats']['success_count']} 次
 - 失败: {d['stats']['fail_count']} 次{error_str}{qos_str}
 
-{chart_str}
-
-### 📈 运行状态
-- 周期: {d['cycle_count']}
-- 任务: {d['stats']['task_count']}
-- 时长: {d['uptime']}
-
-### ⚙️ 配置
-- 网卡: {d['interface']}
-- 比例: 1:{d['target_ratio']}
-- 权重: {d['time_weight']:.2f}x{ai_str}"""
+{chart_str}{ai_str}"""
         return report
 
 
